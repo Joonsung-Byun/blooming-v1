@@ -78,6 +78,7 @@ def match_persona(customer: CustomerProfile) -> Persona:
         return Persona(
             persona_id="persona_premium",
             name="Premium Seeker",
+            description="프리미엄 제품을 선호하는 고소득층 고객으로, 품질과 브랜드 가치를 중시합니다.",
             age_range="30-50",
             income_level="High",
             communication_tone="Sophisticated",
@@ -92,6 +93,7 @@ def match_persona(customer: CustomerProfile) -> Persona:
         return Persona(
             persona_id="persona_savvy",
             name="Savvy Shopper",
+            description="트렌드에 민감하고 가성비를 중시하는 젊은 소비자입니다.",
             age_range="20-30",
             income_level="Medium",
             communication_tone="Friendly",
@@ -106,6 +108,7 @@ def match_persona(customer: CustomerProfile) -> Persona:
         return Persona(
             persona_id="persona_balanced",
             name="Balanced Buyer",
+            description="품질과 가격의 균형을 추구하며, 실용적인 소비를 선호하는 고객입니다.",
             age_range="30-40",
             income_level="Medium",
             communication_tone="Warm",

@@ -9,7 +9,7 @@ from typing import List, Optional
 class Persona(BaseModel):
     """고객 페르소나 - 타겟 세그먼트 정의"""
     
-    persona_id: Optional[int] = Field(None, description="DB 자동 생성 ID")
+    persona_id: Optional[str] = Field(None, description="페르소나 고유 ID")
     name: str = Field(..., description="페르소나 이름")
     description: str
     

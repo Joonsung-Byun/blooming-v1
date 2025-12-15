@@ -45,15 +45,20 @@ def return_response_node(state: GraphState) -> dict:
     # 성공 응답 생성
     generated_message = GeneratedMessage(
         user_id=state["user_id"],
-        message_content=state["message"],
+        message_text=state["message"],
         channel=state.get("channel", "SMS"),
         product_id=state["recommended_product_id"],
         persona_id=state["strategy"]["persona_id"],
+        compliance_passed=state.get("compliance_passed", True),  # 🚨 추가 필수
+        retry_count=state.get("retry_count", 0),
     )
     
     response = MessageResponse(
-        success=True,
-        data=generated_message,
+        message=generated_message.message_text,
+        user=generated_message.user_id,
+        method=generated_message.channel,
     )
+
+    print(f"✅ 최종 응답 생성 response: {response}")
     
     return response.model_dump()
