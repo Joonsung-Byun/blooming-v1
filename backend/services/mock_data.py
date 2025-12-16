@@ -60,7 +60,10 @@ MOCK_CUSTOMERS = {
             last_visit_category="Eye Cream"
         ),
         cart_items=[],
-        recently_viewed_items=["설화수 자음생 크림", "헤라 센슈얼 파우더 매트"]
+        recently_viewed_items=[
+            {"id": "SW-CREAM-001", "name": "설화수 자음생 크림", "brand": "Sulwhasoo"},
+            {"id": "HR-POWDER-01", "name": "헤라 센슈얼 파우더 매트", "brand": "Hera"}
+        ]
     ),
     "user_67890": CustomerProfile(
         user_id="user_67890",
@@ -104,7 +107,11 @@ MOCK_CUSTOMERS = {
             last_visit_category="Makeup"
         ),
         cart_items=[],
-        recently_viewed_items=["헤라 립스틱", "라네즈 워터 뱅크"]
+        recently_viewed_items=[
+            # "헤라 립스틱", "라네즈 워터 뱅크"
+            {"id": "HR-LIPSTICK-01", "name": "헤라 센슈얼 립스틱", "brand": "Hera"},
+            {"id": "LZ-WATERBANK-01", "name": "라네즈 워터 뱅크 모이스처 크림", "brand": "Laneige"}
+            ]
     )
 }
 
