@@ -11,7 +11,8 @@ class GraphState(TypedDict):
     """LangGraph State 정의"""
     user_id: str
     user_data: CustomerProfile
-    strategy: dict
+    recommended_brand: List[str]  # 추천 브랜드 리스트 (최대 4개)
+    strategy: int  # 0: Cold Start, 1: Behavioral, 2: Profile-based, 3: Hybrid
     recommended_product_id: str
     product_data: dict
     brand_tone: dict
@@ -27,9 +28,9 @@ def orchestrator_node(state: GraphState) -> GraphState:
     Orchestrator Node
     
     고객 프로필을 분석하여 메시지 생성 전략을 수립합니다:
+    - 시나리오 결정 (Case 0-3)
+    - 추천 브랜드 결정
     - 페르소나 매칭
-    - 커뮤니케이션 톤 결정
-    - 메시지 전략 수립
     
     Args:
         state: LangGraph State
@@ -40,128 +41,177 @@ def orchestrator_node(state: GraphState) -> GraphState:
     user_data = state["user_data"]
     channel = state.get("channel", "SMS")
     
-    # 1. 페르소나 매칭 로직
-    persona = match_persona(user_data)
+    # 1. 시나리오 결정 (Case 0-3)
+    strategy_case = determine_strategy_case(user_data)
     
-    # 2. 전략 수립
-    strategy = {
-        "persona_id": persona.persona_id,
-        "persona_name": persona.name,
-        "communication_tone": persona.communication_tone,
-        "detail_level": persona.detail_level,
-        "preferred_content_types": persona.preferred_content_types,
-        "channel": channel,
-        "personalization_variables": extract_personalization_variables(user_data),
-        "message_goal": determine_message_goal(user_data),
-    }
+    # 2. 추천 브랜드 결정
+    recommended_brand = determine_recommended_brand(user_data)
     
-    state["strategy"] = strategy
+    # State 업데이트
+    state["strategy"] = strategy_case
+    state["recommended_brand"] = recommended_brand
     state["retry_count"] = 0
+    
+    print(f"🎯 Orchestrator 결과:")
+    print(f"  - Strategy Case: {strategy_case} ({get_strategy_name(strategy_case)})")
+    print(f"  - Recommended Brand: {recommended_brand}")
+    # print(f"  - Persona: {persona.name} ({persona.persona_id})")
     
     return state
 
 
-def match_persona(customer: CustomerProfile) -> Persona:
-    """
-    고객 데이터 기반 페르소나 매칭
-    
-    Args:
-        customer: 고객 프로필
-        
-    Returns:
-        매칭된 Persona
-    """
-    # 간단한 페르소나 매칭 로직 (실제로는 더 복잡한 규칙 필요)
-    
-    # VVIP 고객 → Premium Seeker
-    if customer.membership_level in ["VVIP", "VIP"]:
-        return Persona(
-            persona_id="persona_premium",
-            name="Premium Seeker",
-            description="프리미엄 제품을 선호하는 고소득층 고객으로, 품질과 브랜드 가치를 중시합니다.",
-            age_range="30-50",
-            income_level="High",
-            communication_tone="Sophisticated",
-            detail_level="High",
-            preferred_content_types=["Product_Story", "Ingredient_Details", "Expert_Recommendation"],
-            interests=["Anti-aging", "Premium_Skincare", "Luxury_Beauty"],
-            pain_points=["Lack_of_time", "Aging_concerns"]
-        )
-    
-    # 20대 가성비 중시 → Savvy Shopper
-    elif customer.age_group == "20s" and customer.shopping_behavior.price_sensitivity == "High":
-        return Persona(
-            persona_id="persona_savvy",
-            name="Savvy Shopper",
-            description="트렌드에 민감하고 가성비를 중시하는 젊은 소비자입니다.",
-            age_range="20-30",
-            income_level="Medium",
-            communication_tone="Friendly",
-            detail_level="Medium",
-            preferred_content_types=["Discount_Info", "Trending_Products", "Quick_Tips"],
-            interests=["Trendy_Makeup", "Budget-friendly", "SNS_Popular"],
-            pain_points=["High_prices", "Too_many_choices"]
-        )
-    
-    # 기본 페르소나 → Balanced Buyer
-    else:
-        return Persona(
-            persona_id="persona_balanced",
-            name="Balanced Buyer",
-            description="품질과 가격의 균형을 추구하며, 실용적인 소비를 선호하는 고객입니다.",
-            age_range="30-40",
-            income_level="Medium",
-            communication_tone="Warm",
-            detail_level="Medium",
-            preferred_content_types=["Product_Benefits", "Customer_Reviews", "Usage_Tips"],
-            interests=["Quality_Products", "Skincare_Routine", "Self-care"],
-            pain_points=["Information_overload", "Skin_concerns"]
-        )
-
-
-def extract_personalization_variables(customer: CustomerProfile) -> dict:
-    """
-    고객 데이터에서 개인화 변수 추출
-    
-    Args:
-        customer: 고객 프로필
-        
-    Returns:
-        개인화 변수 dict
-    """
-    variables = {
-        "name": customer.name,
-        "membership_level": customer.membership_level,
-        "last_purchase_product": customer.last_purchase.product_name if customer.last_purchase else None,
-        "skin_type": ", ".join(customer.skin_type),
-        "skin_concerns": ", ".join(customer.skin_concerns),
-        "repurchase_alert": customer.repurchase_cycle_alert,
+def get_strategy_name(case: int) -> str:
+    """전략 케이스 이름 반환"""
+    names = {
+        0: "Cold Start (베스트셀러)",
+        1: "Behavioral (행동 기반)",
+        2: "Profile-based (프로필 기반)",
+        3: "Hybrid (종합 분석)"
     }
-    
-    return variables
+    return names.get(case, "Unknown")
 
 
-def determine_message_goal(customer: CustomerProfile) -> str:
+def determine_strategy_case(customer: CustomerProfile) -> int:
     """
-    고객 상태 기반 메시지 목표 결정
+    고객 데이터를 분석하여 추천 전략 케이스를 결정합니다.
+    
+    Case 0 (Cold Start): 데이터 전무 - 베스트셀러 추천
+    Case 1 (Behavioral): 과거/실시간 데이터만 존재 - Item-to-Item CF
+    Case 2 (Profile-based): 뷰티 프로필만 존재 - Content-based Filtering
+    Case 3 (Hybrid): 모든 데이터 보유 - 재구매 + 프로필 + 행동 데이터
     
     Args:
         customer: 고객 프로필
         
     Returns:
-        메시지 목표 (예: "재구매 유도", "신상품 소개", "장바구니 유도")
+        전략 케이스 번호 (0-3)
     """
-    # 재구매 주기 알림이 있으면 재구매 유도
-    if customer.repurchase_cycle_alert:
-        return "재구매 유도"
+    # 구매 이력 확인
+    has_purchase_history = len(customer.purchase_history) > 0
+    purchase_count = len(customer.purchase_history)
     
-    # 장바구니에 상품이 있으면 장바구니 유도
-    if customer.cart_items:
-        return "장바구니 구매 유도"
+    # 실시간 행동 데이터 확인
+    has_cart = len(customer.cart_items) > 0
+    has_viewed = len(customer.recently_viewed_items) > 0
+    has_behavioral_data = has_cart or has_viewed
     
-    # 최근 방문했지만 구매 안 함 → 신상품 소개
-    if customer.last_engagement:
-        return "신상품 소개"
+    # 뷰티 프로필 확인
+    has_beauty_profile = (
+        len(customer.skin_type) > 0 and 
+        len(customer.skin_concerns) > 0
+    )
     
-    # 기본: 제품 추천
-    return "맞춤 제품 추천"
+    # 케이스 결정 로직
+    if not has_purchase_history and not has_behavioral_data:
+        # Case 0: 아무 데이터도 없음 → Cold Start
+        return 0
+    
+    elif not has_purchase_history and has_behavioral_data:
+        # Case 1: 구매는 없지만 장바구니/최근 본 상품이 있음 → Behavioral
+        return 1
+    
+    elif has_purchase_history and purchase_count <= 2 and has_beauty_profile:
+        # Case 2: 구매 이력이 적고 뷰티 프로필이 명확함 → Profile-based
+        return 2
+    
+    elif has_purchase_history and purchase_count >= 3:
+        # Case 3: 구매 이력이 충분함 → Hybrid (재구매 + 프로필 + 행동)
+        return 3
+    
+    else:
+        # 기본값: 0 (Cold Start)
+        return 0
+
+
+# 연령대별 브랜드 매핑
+BRAND_AGE_MAPPING = {
+    "Innisfree": ["10s", "20s"],
+    "Espoir": ["20s", "30s"],
+    "Mamonde": ["20s", "30s"],
+    "Laneige": ["20s", "30s"],
+    "Hanyul": ["30s", "40s"],
+    "IOPE": ["30s", "40s", "50s"],
+    "HERA": ["30s", "40s"],
+    "Primera": ["30s", "40s"],
+    "Aestura": ["30s", "40s", "50s"],
+    "Sulwhasoo": ["40s", "50s", "60s+"]
+}
+
+
+def determine_recommended_brand(customer: CustomerProfile) -> List[str]:
+    """
+    고객 데이터를 기반으로 추천 브랜드 리스트를 결정합니다.
+    
+    로직:
+    1. purchase_history에서 마지막 1-2개 브랜드
+    2. cart_items에서 1-2개 브랜드
+    3. 합쳐서 4개면 return, 아니면 연령대별 브랜드 추가
+    
+    Args:
+        customer: 고객 프로필
+        
+    Returns:
+        추천 브랜드 리스트 (최대 4개)
+    """
+    brands = set()
+    
+    # 1. 구매 이력에서 최근 1-2개 브랜드
+    if len(customer.purchase_history) > 0:
+        # 날짜 기준 내림차순 정렬 (최근 구매 우선)
+        sorted_history = sorted(
+            customer.purchase_history, 
+            key=lambda x: x.purchase_date, 
+            reverse=True
+        )
+        for item in sorted_history[:2]:
+            brands.add(item.brand)
+            if len(brands) >= 2:
+                break
+    
+    # 2. 장바구니에서 1-2개 브랜드
+    if len(customer.cart_items) > 0 and len(brands) < 4:
+        for item in customer.cart_items[:2]:
+            if item.brand:  # brand 필드가 있을 때만
+                brands.add(item.brand)
+                if len(brands) >= 4:
+                    break
+    
+    # 3. 이미 4개면 반환
+    if len(brands) >= 4:
+        return list(brands)
+    
+    # 4. 부족하면 연령대별 브랜드 추가
+    age_brands = get_brands_for_age(customer.age_group)
+    for brand in age_brands:
+        brands.add(brand)
+        if len(brands) >= 4:
+            break
+    
+    return list(brands)
+
+
+def get_brands_for_age(age_group: str) -> List[str]:
+    """
+    연령대에 맞는 브랜드 리스트 반환
+    
+    Args:
+        age_group: 연령대 (20s, 30s, 40s, 50s+)
+        
+    Returns:
+        해당 연령대에 맞는 브랜드 리스트
+    """
+    # 50s+를 50s로 매핑
+    normalized_age = age_group.replace("+", "")
+    if normalized_age == "50s":
+        # 50s+는 50s, 60s+ 모두 매칭
+        matching_brands = [
+            brand for brand, ages in BRAND_AGE_MAPPING.items()
+            if "50s" in ages or "60s+" in ages
+        ]
+    else:
+        matching_brands = [
+            brand for brand, ages in BRAND_AGE_MAPPING.items()
+            if age_group in ages
+        ]
+    
+    return matching_brands if matching_brands else ["Laneige"]  # 기본값

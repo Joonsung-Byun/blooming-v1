@@ -45,6 +45,7 @@ class CartItem(BaseModel):
     """장바구니 아이템"""
     id: str
     name: str
+    brand: Optional[str] = None
     added_at: str  # YYYY-MM-DD
 
 
@@ -105,6 +106,10 @@ class CustomerProfile(BaseModel):
                     "product_id": "SW-SERUM-001",
                     "product_name": "Sulwhasoo First Care Activating Serum"
                 },
+                "purchase_history": [ 
+                    {"brand": "Sulwhasoo", "category": "Serum", "purchase_date": "2024-10-01"},
+                    {"brand": "Hera", "category": "Lip", "purchase_date": "2024-08-15"}
+                ],
                 "shopping_behavior": {
                     "event_participation": "High",
                     "cart_abandonment_rate": "Frequent",
@@ -114,6 +119,20 @@ class CustomerProfile(BaseModel):
                     "history": ["WELCOME_10", "BDAY_2024"],
                     "propensity": "Discount_Seeker",
                     "preferred_type": "Percentage_Off"
-                }
+                },
+                "last_engagement": {
+                    "visit_date": "2024-11-20", 
+                    "click_date": "2024-11-20",
+                    "last_visit_category": "Eye Cream" 
+                },
+
+                "cart_items": [
+                    {"id": "HR-CUSHION-02", "name": "Hera Black Cushion", "added_at": "2024-11-19", "brand": "Hera"}
+                ],
+
+                "recently_viewed_items": [
+                    "Sulwhasoo Concentrated Ginseng Cream",
+                    "Hera Sensual Powder Matte"
+                ]
             }
         }
