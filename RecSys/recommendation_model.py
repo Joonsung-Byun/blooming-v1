@@ -59,10 +59,16 @@ async def get_recommendation(request_data: Any) -> Dict[str, Any]:
     # Fetch products dynamically
     products_db = await fetch_products_from_supabase()
     
-    # If DB fetch fails or is empty, use a minimal fallback to prevent crash
+    # If DB fetch fails or is empty, use a rich mock DB for testing
     if not products_db:
         products_db = {
-            "HR-FOUNDATION-01": "Hera Silky Stay Foundation (Fallback Product)"
+            "SW-SERUM-001": "Sulwhasoo Concentrated Ginseng Renewing Serum (Brand: Sulwhasoo, Category: Serum, Anti-aging, Dry skin)",
+            "HR-CUSHION-02": "Hera Black Cushion (Brand: Hera, Category: Makeup, All skin types, Trendy)",
+            "HR-FOUNDATION-01": "Hera Silky Stay Foundation (Brand: Hera, Category: Makeup, Long-lasting)",
+            "IO-CREAM-003": "IOPE Stem III Cream (Brand: IOPE, Category: Cream, Anti-aging, Repair)",
+            "LN-MASK-004": "Laneige Water Sleeping Mask (Brand: Laneige, Category: Mask, Hydration, Night care)",
+            "ET-TONER-005": "Etude House SoonJung Toner (Brand: Etude, Category: Toner, Sensitive, Soothing)",
+            "IN-CLAY-006": "Innisfree Volcanic Pore Clay Mask (Brand: Innisfree, Category: Mask, Pore care, Oily skin)"
         }
 
     case = request_data.case
@@ -75,6 +81,7 @@ async def get_recommendation(request_data: Any) -> Dict[str, Any]:
     
     Return the result in JSON format with the following keys:
     - product_id: The ID of the recommended product.
+    - product_name: The exact name of the recommended product.
     - score: A confidence score between 0.0 and 1.0.
     - reason: A short explanation of why this product was recommended (in Korean).
     """
@@ -171,9 +178,15 @@ async def get_recommendation(request_data: Any) -> Dict[str, Any]:
         result = json.loads(content)
         
         # Validate product_id
-        if result.get("product_id") not in PRODUCTS_DB:
+        if result.get("product_id") not in products_db:
             # Fallback if LLM hallucinates an ID
-            result["product_id"] = "HR-FOUNDATION-01"
+            # Use the first available product ID from the DB
+            fallback_id = next(iter(products_db)) if products_db else "HR-FOUNDATION-01"
+            result["product_id"] = fallback_id
+            # Try to extract name from DB value or use default
+            db_val = products_db.get(fallback_id, "Hera Silky Stay Foundation")
+            # DB value format: "Name (Brand: ...)"
+            result["product_name"] = db_val.split(" (")[0] if " (" in db_val else db_val
             result["reason"] = "기본 추천 상품입니다. (LLM ID 오류)"
             
         return result
@@ -183,6 +196,8 @@ async def get_recommendation(request_data: Any) -> Dict[str, Any]:
         # Fallback in case of error
         return {
             "product_id": "HR-FOUNDATION-01",
+            "product_name": "Hera Silky Stay Foundation",
             "score": 0.5,
             "reason": "시스템 오류로 인한 기본 추천입니다."
         }
+

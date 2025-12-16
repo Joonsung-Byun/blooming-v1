@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uvicorn
@@ -23,8 +23,13 @@ class RecommendationRequest(BaseModel):
 
 class RecommendationResponse(BaseModel):
     product_id: str
+    product_name: str
     score: float
     reason: str
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
 
 @app.get("/")
 async def root():
@@ -42,4 +47,4 @@ async def recommend(request: RecommendationRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8001, reload=True)
