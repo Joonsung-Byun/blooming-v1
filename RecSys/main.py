@@ -27,6 +27,7 @@ class RecommendationResponse(BaseModel):
     product_name: str
     score: float
     reason: str
+    product_data: Optional[Dict[str, Any]] = None
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():

@@ -5,8 +5,10 @@ from openai import OpenAI
 import httpx
 from config import settings
 
-# Global cache for products
+# Global cache for products (formatted for LLM)
 PRODUCTS_CACHE = {}
+# Full product data cache (raw from DB)
+PRODUCTS_FULL_DATA = {}
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
@@ -14,7 +16,7 @@ async def fetch_products_from_supabase() -> Dict[str, str]:
     """
     Fetch products from Supabase and format them for the LLM.
     """
-    global PRODUCTS_CACHE
+    global PRODUCTS_CACHE, PRODUCTS_FULL_DATA
     if PRODUCTS_CACHE:
         return PRODUCTS_CACHE
 
@@ -32,6 +34,7 @@ async def fetch_products_from_supabase() -> Dict[str, str]:
             
             # Format: "ID": "Name (Brand, Category, Description)"
             formatted_products = {}
+            full_data = {}  # Store full product data
             for p in products_data:
                 # Adjust field names based on actual DB schema
                 # Schema: id, product_code, brand, name, category_major, category_middle, category_small, 
@@ -63,8 +66,11 @@ async def fetch_products_from_supabase() -> Dict[str, str]:
                 if p_id and name:
                     info = f"{name} (Brand: {brand}, Category: {category}, {desc})"
                     formatted_products[p_id] = info
+                    # Store full product data
+                    full_data[p_id] = p
             
             PRODUCTS_CACHE = formatted_products
+            PRODUCTS_FULL_DATA = full_data
             
             # Debug: Print first 3 products to verify format
             print("DEBUG: Sample products from DB:")
@@ -235,15 +241,48 @@ async def get_recommendation(request_data: Any) -> Dict[str, Any]:
         # Validate product_id
         if result.get("product_id") not in products_db:
             # Fallback if LLM hallucinates an ID
-            # Use the first available product ID from the DB
             fallback_id = next(iter(products_db)) if products_db else "HR-FOUNDATION-01"
             result["product_id"] = fallback_id
-            # Try to extract name from DB value or use default
             db_val = products_db.get(fallback_id, "Hera Silky Stay Foundation")
-            # DB value format: "Name (Brand: ...)"
             result["product_name"] = db_val.split(" (")[0] if " (" in db_val else db_val
             result["reason"] = "기본 추천 상품입니다. (LLM ID 오류)"
-            
+        
+        # Add full product data from Supabase
+        product_id = result["product_id"]
+        print(f"DEBUG: Looking for product_id '{product_id}' in PRODUCTS_FULL_DATA")
+        print(f"DEBUG: PRODUCTS_FULL_DATA has {len(PRODUCTS_FULL_DATA)} products")
+        print(f"DEBUG: First 3 keys in PRODUCTS_FULL_DATA: {list(PRODUCTS_FULL_DATA.keys())[:3]}")
+        
+        if product_id in PRODUCTS_FULL_DATA:
+            full_product = PRODUCTS_FULL_DATA[product_id]
+            print(f"DEBUG: Found product in PRODUCTS_FULL_DATA: {full_product.get('name', 'N/A')}")
+            result["product_data"] = {
+                "product_id": product_id,
+                "brand": full_product.get("brand", ""),
+                "name": full_product.get("name", ""),
+                "category": {
+                    "major": full_product.get("category_major", ""),
+                    "middle": full_product.get("category_middle", ""),
+                    "small": full_product.get("category_small", ""),
+                },
+                "price": {
+                    "original_price": full_product.get("price_original", 0),
+                    "discounted_price": full_product.get("price_final", 0),
+                    "discount_rate": full_product.get("discount_rate", 0),
+                },
+                "review": {
+                    "score": full_product.get("review_score", 0.0),
+                    "count": full_product.get("review_count", 0),
+                    "top_keywords": full_product.get("keywords", []) if isinstance(full_product.get("keywords"), list) else [],
+                },
+                "description_short": full_product.get("features", ""),
+            }
+            print(f"DEBUG: product_data added to result. Keys in result: {list(result.keys())}")
+        else:
+            print(f"DEBUG: product_id '{product_id}' NOT FOUND in PRODUCTS_FULL_DATA!")
+        
+        print(f"DEBUG: Final result keys before return: {list(result.keys())}")
+        print(f"DEBUG: Has product_data: {'product_data' in result}")
         return result
 
     except Exception as e:

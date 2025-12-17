@@ -114,8 +114,8 @@ class CustomerProfile(BaseModel):
                     "product_name": "Sulwhasoo First Care Activating Serum"
                 },
                 "purchase_history": [ 
-                    {"brand": "Sulwhasoo", "category": "Serum", "purchase_date": "2024-10-01"},
-                    {"brand": "Hera", "category": "Lip", "purchase_date": "2024-08-15"}
+                    {"brand": "설화수", "category": "Serum", "purchase_date": "2024-10-01"},
+                    {"brand": "헤라", "category": "Lip", "purchase_date": "2024-08-15"}
                 ],
                 "shopping_behavior": {
                     "event_participation": "High",
@@ -134,12 +134,12 @@ class CustomerProfile(BaseModel):
                 },
 
                 "cart_items": [
-                    {"id": "HR-CUSHION-02", "name": "Hera Black Cushion", "added_at": "2024-11-19", "brand": "Hera"}
+                    {"id": "HR-CUSHION-02", "name": "Hera Black Cushion", "added_at": "2024-11-19", "brand": "헤라"}
                 ],
 
                 "recently_viewed_items": [
-                    {"id": "SW-CREAM-001", "name": "Sulwhasoo Concentrated Ginseng Cream", "brand": "Sulwhasoo"},
-                    {"id": "HR-POWDER-01", "name": "Hera Sensual Powder Matte", "brand": "Hera"}
+                    {"id": "SW-CREAM-001", "name": "Sulwhasoo Concentrated Ginseng Cream", "brand": "설화수"},
+                    {"id": "HR-POWDER-01", "name": "Hera Sensual Powder Matte", "brand": "헤라"}
                 ]
             }
         }

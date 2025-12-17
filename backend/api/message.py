@@ -63,6 +63,7 @@ async def generate_message(
             "retry_count": 0,
             "error": "",
         }
+        print(f"🚀 메시지 생성 워크플로우 시작, {initial_state}")
         
         result = message_workflow.invoke(initial_state)
         
