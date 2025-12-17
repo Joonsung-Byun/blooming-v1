@@ -23,3 +23,9 @@ env/
 *.swp
 *.swo
 *.swn
+
+RecSys/.env
+RecSys/__pycache__/
+RecSys/venv/
+RecSys/.vscode/
+
