@@ -62,13 +62,20 @@ async def generate_message(
             "compliance_passed": False,
             "retry_count": 0,
             "error": "",
+            "error_reason": "",  # Compliance 실패 이유
+            "success": False,  # 초기값
         }
         
         result = message_workflow.invoke(initial_state)
         
         # 3. 결과 검증
         if result.get("success", False):
-            return result
+            # MessageResponse 모델로 변환하여 반환
+            return MessageResponse(
+                message=result["message"],
+                user=result["user_id"],
+                method=result["channel"]
+            )
         else:
             # 에러 응답
             raise HTTPException(
@@ -77,6 +84,9 @@ async def generate_message(
             )
     
     except Exception as e:
+        print(f"❌ 예외 발생: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=f"메시지 생성 중 오류 발생: {str(e)}"

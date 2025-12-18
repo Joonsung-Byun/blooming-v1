@@ -12,7 +12,7 @@ class GraphState(TypedDict):
     user_id: str
     user_data: CustomerProfile
     recommended_brand: List[str]  # 추천 브랜드 리스트 (최대 4개)
-    strategy: int  # 0: Cold Start, 1: Behavioral, 2: Profile-based, 3: Hybrid
+    strategy: int  # 1: Cold Start, 2: Behavioral, 3: Profile-based, 4: Hybrid
     recommended_product_id: str
     product_data: dict
     brand_tone: dict
@@ -21,6 +21,8 @@ class GraphState(TypedDict):
     compliance_passed: bool
     retry_count: int
     error: str
+    error_reason: str  # Compliance 실패 이유
+    success: bool  # API 응답용
 
 
 def orchestrator_node(state: GraphState) -> GraphState:
@@ -63,10 +65,10 @@ def orchestrator_node(state: GraphState) -> GraphState:
 def get_strategy_name(case: int) -> str:
     """전략 케이스 이름 반환"""
     names = {
-        0: "Cold Start (베스트셀러)",
-        1: "Behavioral (행동 기반)",
-        2: "Profile-based (프로필 기반)",
-        3: "Hybrid (종합 분석)"
+        1: "Cold Start (베스트셀러)",
+        2: "Behavioral (행동 기반)",
+        3: "Profile-based (프로필 기반)",
+        4: "Hybrid (종합 분석)"
     }
     return names.get(case, "Unknown")
 
@@ -75,16 +77,16 @@ def determine_strategy_case(customer: CustomerProfile) -> int:
     """
     고객 데이터를 분석하여 추천 전략 케이스를 결정합니다.
     
-    Case 0 (Cold Start): 데이터 전무 - 베스트셀러 추천
-    Case 1 (Behavioral): 과거/실시간 데이터만 존재 - Item-to-Item CF
-    Case 2 (Profile-based): 뷰티 프로필만 존재 - Content-based Filtering
-    Case 3 (Hybrid): 모든 데이터 보유 - 재구매 + 프로필 + 행동 데이터
+    Case 1 (Cold Start): 데이터 전무 - 베스트셀러 추천
+    Case 2 (Behavioral): 과거/실시간 데이터만 존재 - Item-to-Item CF
+    Case 3 (Profile-based): 뷰티 프로필만 존재 - Content-based Filtering
+    Case 4 (Hybrid): 모든 데이터 보유 - 재구매 + 프로필 + 행동 데이터
     
     Args:
         customer: 고객 프로필
         
     Returns:
-        전략 케이스 번호 (0-3)
+        전략 케이스 번호 (1-4)
     """
     # 구매 이력 확인
     has_purchase_history = len(customer.purchase_history) > 0
@@ -103,38 +105,38 @@ def determine_strategy_case(customer: CustomerProfile) -> int:
     
     # 케이스 결정 로직
     if not has_purchase_history and not has_behavioral_data:
-        # Case 0: 아무 데이터도 없음 → Cold Start
-        return 0
-    
-    elif not has_purchase_history and has_behavioral_data:
-        # Case 1: 구매는 없지만 장바구니/최근 본 상품이 있음 → Behavioral
+        # Case 1: 아무 데이터도 없음 → Cold Start
         return 1
     
-    elif has_purchase_history and purchase_count <= 2 and has_beauty_profile:
-        # Case 2: 구매 이력이 적고 뷰티 프로필이 명확함 → Profile-based
+    elif not has_purchase_history and has_behavioral_data:
+        # Case 2: 구매는 없지만 장바구니/최근 본 상품이 있음 → Behavioral
         return 2
     
-    elif has_purchase_history and purchase_count >= 3:
-        # Case 3: 구매 이력이 충분함 → Hybrid (재구매 + 프로필 + 행동)
+    elif has_purchase_history and purchase_count <= 2 and has_beauty_profile:
+        # Case 3: 구매 이력이 적고 뷰티 프로필이 명확함 → Profile-based
         return 3
     
+    elif has_purchase_history and purchase_count >= 3:
+        # Case 4: 구매 이력이 충분함 → Hybrid (재구매 + 프로필 + 행동)
+        return 4
+    
     else:
-        # 기본값: 0 (Cold Start)
-        return 0
+        # 기본값:1  (Cold Start)
+        return 1
 
 
 # 연령대별 브랜드 매핑
 BRAND_AGE_MAPPING = {
-    "Innisfree": ["10s", "20s"],
-    "Espoir": ["20s", "30s"],
-    "Mamonde": ["20s", "30s"],
-    "Laneige": ["20s", "30s"],
-    "Hanyul": ["30s", "40s"],
-    "IOPE": ["30s", "40s", "50s"],
-    "HERA": ["30s", "40s"],
-    "Primera": ["30s", "40s"],
-    "Aestura": ["30s", "40s", "50s"],
-    "Sulwhasoo": ["40s", "50s", "60s+"]
+    "이니스프리": ["10s", "20s"],
+    "에스쁘아": ["20s", "30s"],
+    "마몽드": ["20s", "30s"],
+    "라네즈": ["20s", "30s"],
+    "한율": ["30s", "40s"],
+    "아이오페": ["30s", "40s", "50s"],
+    "헤라": ["30s", "40s"],
+    "프리메라": ["30s", "40s"],
+    "에스트라": ["30s", "40s", "50s"],
+    "설화수": ["40s", "50s", "60s+"]
 }
 
 
