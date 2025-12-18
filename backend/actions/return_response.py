@@ -20,6 +20,8 @@ class GraphState(TypedDict):
     compliance_passed: bool
     retry_count: int
     error: str
+    error_reason: str  # Compliance 실패 이유
+    success: bool  # API 응답용
 
 
 def return_response_node(state: GraphState) -> dict:
@@ -36,29 +38,15 @@ def return_response_node(state: GraphState) -> dict:
     """
     if not state.get("compliance_passed", False):
         # Compliance 실패 시 에러 응답
+        print(f"❌ Compliance 실패: {state.get('error', '메시지 생성 실패')}")
         return {
             "success": False,
             "error": state.get("error", "메시지 생성 실패"),
-            "retry_count": state.get("retry_count", 0),
         }
     
     # 성공 응답 생성
-    generated_message = GeneratedMessage(
-        user_id=state["user_id"],
-        message_text=state["message"],
-        channel=state.get("channel", "SMS"),
-        product_id=state["recommended_product_id"],
-        persona_id=state["strategy"]["persona_id"],
-        compliance_passed=state.get("compliance_passed", True),  # 🚨 추가 필수
-        retry_count=state.get("retry_count", 0),
-    )
+    print(f"✅ 최종 응답 생성: user={state['user_id']}, message={state['message'][:50]}...")
     
-    response = MessageResponse(
-        message=generated_message.message_text,
-        user=generated_message.user_id,
-        method=generated_message.channel,
-    )
-
-    print(f"✅ 최종 응답 생성 response: {response}")
-    
-    return response.model_dump()
+    return {
+        "success": True,
+    }

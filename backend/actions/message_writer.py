@@ -20,6 +20,8 @@ class GraphState(TypedDict):
     compliance_passed: bool
     retry_count: int
     error: str
+    error_reason: str  # Compliance 실패 이유
+    success: bool  # API 응답용
 
 
 def message_writer_node(state: GraphState) -> GraphState:
@@ -33,11 +35,13 @@ def message_writer_node(state: GraphState) -> GraphState:
     product_data = state["product_data"]
     brand_tone = state["brand_tone"]
     channel = state.get("channel", "APPPUSH")
+    retry_count = state.get("retry_count", 0)
+    error_reason = state.get("error_reason", "")  # Compliance 실패 이유 가져오기
     
     import json
     import os
 
-    print(f"🖋️ Message Writer Node 시작... {state}")
+    # print(f"🖋️ Message Writer Node 시작... {state}")
 
     # 1. 프롬프트 템플릿 로드
     prompt_config = load_prompt_template("writer_prompt.yaml")
@@ -86,6 +90,23 @@ def message_writer_node(state: GraphState) -> GraphState:
             tone_style=brand_tone['tone_manner_style'],
             tone_examples=tone_examples
         )
+
+    # 재시도인 경우 Compliance 실패 이유를 프롬프트에 추가
+    if retry_count > 0 and error_reason:
+        system_prompt += f"""
+
+⚠️ **중요: 이전 메시지가 화장품법 위반으로 거부되었습니다**
+재시도 횟수: {retry_count}/5
+
+[이전 거부 이유]
+{error_reason}
+
+**반드시 위 문제를 해결한 메시지를 작성하세요:**
+- 위반했던 표현을 절대 사용하지 마세요
+- 대체 가능한 합법적 표현을 사용하세요
+- 화장품법 준수를 최우선으로 하세요
+"""
+        print(f"🔄 [Retry {retry_count}] 이전 거부 이유를 프롬프트에 포함시켰습니다.")
 
     # 2. 채널 제한 텍스트 결정 (Restored)
     channel_limits = {
@@ -160,15 +181,7 @@ def message_writer_node(state: GraphState) -> GraphState:
         
         state["message"] = generated_message
         state["error"] = ""
-        
-        # 6. 토큰 및 비용 출력
-        print("\n" + "="*50)
-        print("💰 Token Usage & Cost (GPT-4)")
-        print(f"  - Input Tokens: {usage['prompt_tokens']}")
-        print(f"  - Output Tokens: {usage['completion_tokens']}")
-        print(f"  - Total Tokens: {usage['total_tokens']}")
-        print(f"  - Estimated Cost: ${total_cost:.4f}")
-        print("="*50 + "\n")
+
         
     except Exception as e:
         state["error"] = f"메시지 생성 중 오류 발생: {str(e)}"

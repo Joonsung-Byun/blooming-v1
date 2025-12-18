@@ -34,12 +34,12 @@ MOCK_CUSTOMERS = {
         ),
         purchase_history=[
             PurchaseHistoryItem(
-                brand="Sulwhasoo",
+                brand="설화수",
                 category="Serum",
                 purchase_date="2024-10-01"
             ),
             PurchaseHistoryItem(
-                brand="Hera",
+                brand="헤라",
                 category="Lip",
                 purchase_date="2024-08-15"
             )
@@ -61,8 +61,8 @@ MOCK_CUSTOMERS = {
         ),
         cart_items=[],
         recently_viewed_items=[
-            {"id": "SW-CREAM-001", "name": "설화수 자음생 크림", "brand": "Sulwhasoo"},
-            {"id": "HR-POWDER-01", "name": "헤라 센슈얼 파우더 매트", "brand": "Hera"}
+            {"id": "SW-CREAM-001", "name": "설화수 자음생 크림", "brand": "설화수"},
+            {"id": "HR-POWDER-01", "name": "헤라 센슈얼 파우더 매트", "brand": "헤라"}
         ]
     ),
     "user_67890": CustomerProfile(
@@ -86,7 +86,7 @@ MOCK_CUSTOMERS = {
         ),
         purchase_history=[
             PurchaseHistoryItem(
-                brand="Hera",
+                brand="헤라",
                 category="Foundation",
                 purchase_date="2024-09-15"
             )
@@ -145,7 +145,7 @@ MOCK_PRODUCTS = {
     ),
     "HR-CUSHION-02": Product(
         product_id="HR-CUSHION-02",
-        brand="Hera",
+        brand="헤라",
         name="헤라 블랙 쿠션 SPF34 PA++",
         category=ProductCategory(
             major="메이크업",
@@ -170,7 +170,7 @@ MOCK_PRODUCTS = {
     ),
     "HR-FOUNDATION-01": Product(
         product_id="HR-FOUNDATION-01",
-        brand="Hera",
+        brand="헤라",
         name="헤라 실키 스테이 파운데이션 30g",
         category=ProductCategory(
             major="메이크업",
@@ -205,7 +205,7 @@ MOCK_BRANDS = {
         ]
     ),
     "Hera": BrandProfile(
-        brand_name="Hera",
+        brand_name="헤라",
         target_demographic="20-30대 트렌디한 여성",
         tone_manner_style="youthful",
         tone_manner_examples=[
