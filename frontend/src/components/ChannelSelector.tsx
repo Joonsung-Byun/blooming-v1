@@ -32,7 +32,7 @@ export function ChannelSelector({ selected, onSelect, disabled = false }: Channe
             text-xs font-black
             ${selected === ch.id 
               ? 'bg-yellow-300 shadow-none translate-x-1 translate-y-1' 
-              : 'bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-gray-50'
+              : 'bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]  hover:-translate-y-1 hover:bg-yellow-50'
             }
             disabled:opacity-50 disabled:cursor-not-allowed
           `}

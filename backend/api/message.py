@@ -5,12 +5,22 @@ GET /message 엔드포인트
 from fastapi import APIRouter, Header, HTTPException, Query
 from models.message import MessageResponse, ErrorResponse
 from services.mock_data import get_mock_customer
-from services.user_service import get_customer_from_db
+from services.user_service import get_customer_from_db, get_customer_list
 from graph import message_workflow
 from typing import Optional
 
 router = APIRouter()
 
+@router.get(
+    "/customers",
+    summary="고객 목록 조회",
+    description="프론트엔드 페르소나 선택 버튼(P1, P2...)을 위한 고객 리스트 반환"
+)
+async def get_customers_endpoint():
+    """
+    services/user_service.py의 함수를 호출하여 고객 목록을 반환
+    """
+    return get_customer_list()
 
 @router.get(
     "/message",
