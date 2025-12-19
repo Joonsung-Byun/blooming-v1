@@ -110,9 +110,10 @@ def message_writer_node(state: GraphState) -> GraphState:
 
     # 2. 채널 제한 텍스트 결정 (Restored)
     channel_limits = {
-        "APPPUSH": "50자 이내",
-        "KAKAO": "1000자 이내 (첫 문장 30자 이내 권장)",
-        "EMAIL": "제한 없음 (단, 핵심 메시지는 첫 200자 이내)",
+        "APP_PUSH": "50자 이내 (제목 1줄 + 본문 1줄, 이모지 포함 필수)",
+        "SMS": "45자 이내 (줄바꿈 없이 핵심만 2문장으로)",
+        "KAKAO": "1000자 이내 (첫 문장은 고객 이름과 인사로 시작, 줄바꿈 활용)",
+        "EMAIL": "제한 없음 (제목/본문 구분, 서론-본론-결론 구조)"
     }
     limit = channel_limits.get(channel, "적절한 길이")
     

@@ -27,6 +27,7 @@ export interface CustomerPersona {
   skin_type?: string[];    // 표시용: 태그 (배열이 아닐 경우를 대비해 ? 처리)
   keywords?: string[];     // 표시용: 태그
   preferred_tone?: string; // 표시용: 톤앤매너 설명
+  persona_category?: string; // 표시용: 페르소나 카테고리
 }
 
 export interface ErrorResponse {

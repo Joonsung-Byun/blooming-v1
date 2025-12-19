@@ -35,7 +35,7 @@ async def get_customers_endpoint():
 )
 async def generate_message(
     x_user_id: str = Header(..., description="고객 ID"),
-    channel: Optional[str] = Query("SMS", description="메시지 채널 (SMS, KAKAO, EMAIL)"),
+    channel: Optional[str] = Query("SMS", description="메시지 채널 (SMS, KAKAO, EMAIL, APP_PUSH)"),
 ):
     """
     개인화 메시지 생성 API

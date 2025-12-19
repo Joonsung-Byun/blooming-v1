@@ -42,6 +42,7 @@ function App() {
       name: `New Persona ${customPersonas.length + 1}`,
       membership_level: 'TEMP',
       preferred_tone: '아직 설정되지 않음',
+      persona_category: '아직 설정되지 않음',
       keywords: [],
       skin_type: []
     };
@@ -81,7 +82,7 @@ function App() {
       }
     };
     fetchCustomers();
-  }, []); // 마운트 시 1회 실행
+  }, []);
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -296,8 +297,17 @@ function App() {
                 <div className="pt-2 border-t-2 border-dashed border-black/20">
                   <p className="text-[9px] font-bold text-gray-500 uppercase mb-1">Preferred Tone</p>
                   <p className="text-[11px] leading-snug text-gray-800 bg-yellow-100 p-2 border border-black rounded-sm relative">
-                    <span className="absolute -top-1.5 -left-1 text-[10px]">💡</span>
-                    {selectedCustomer.preferred_tone}
+                    <span className="absolute -top-1.5 -left-1 text-[15px]">🎨</span>
+                    <span className="font-black">
+                     {selectedCustomer.preferred_tone}
+                    </span>
+                  </p>
+                  <p className="text-[9px] font-bold text-gray-500 uppercase mb-1">Persona Category</p>
+                  <p className="text-[11px] leading-snug text-gray-800 bg-yellow-100 p-2 border border-black rounded-sm relative">
+                    <span className="absolute -top-1.5 -left-1 text-[15px]">📂</span>
+                    <span className="font-black">
+                      {selectedCustomer.persona_category}
+                    </span>
                   </p>
                 </div>
               </div>
