@@ -37,17 +37,9 @@ def message_writer_node(state: GraphState) -> GraphState:
     product_data = state["product_data"]
     brand_tone = state["brand_tone"]
     channel = state.get("channel", "APPPUSH")
-    retry_count = state.get("retry_count", 0)
-    error_reason = state.get("error_reason", "")  # Compliance 실패 이유 가져오기
     
-    # Strategy replacement logic
-    crm_reason = state.get("crm_reason", "Product Recommendation")
-    target_persona = state.get("target_persona", "Trend Setter")
-
     import json
     import os
-
-    # print(f"🖋️ Message Writer Node 시작... {state}")
 
     # 1. 프롬프트 템플릿 로드
     prompt_config = load_prompt_template("writer_prompt.yaml")
@@ -86,7 +78,6 @@ def message_writer_node(state: GraphState) -> GraphState:
 """
     else:
         # Fallback to Legacy Logic
-        print(f"⚠️ {brand_name}에 대한 CRM 가이드라인이 없습니다. 기본 템플릿을 사용합니다.")
         system_prompt_template = prompt_config["system"]
         tone_examples = "\n".join(f"- {ex}" for ex in brand_tone.get("tone_manner_examples", []))
         
@@ -96,38 +87,36 @@ def message_writer_node(state: GraphState) -> GraphState:
             tone_examples=tone_examples
         )
 
-    # 재시도인 경우 Compliance 실패 이유를 프롬프트에 추가
-    if retry_count > 0 and error_reason:
-        system_prompt += f"""
-
-⚠️ **중요: 이전 메시지가 화장품법 위반으로 거부되었습니다**
-재시도 횟수: {retry_count}/5
-
-[이전 거부 이유]
-{error_reason}
-
-**반드시 위 문제를 해결한 메시지를 작성하세요:**
-- 위반했던 표현을 절대 사용하지 마세요
-- 대체 가능한 합법적 표현을 사용하세요
-- 화장품법 준수를 최우선으로 하세요
-"""
-    
-
     # 2. 채널 제한 텍스트 결정 (Restored)
     channel_limits = {
-        "APP_PUSH": "50자 이내 (제목 1줄 + 본문 1줄, 이모지 포함 필수)",
-        "SMS": "45자 이내 (줄바꿈 없이 핵심만 2문장으로)",
-        "KAKAO": "1000자 이내 (첫 문장은 고객 이름과 인사로 시작, 줄바꿈 활용)",
-        "EMAIL": "제한 없음 (제목/본문 구분, 서론-본론-결론 구조)"
+        "APPPUSH": "50자 이내",
+        "KAKAO": "1000자 이내 (첫 문장 30자 이내 권장)",
+        "EMAIL": "제한 없음 (단, 핵심 메시지는 첫 200자 이내)",
     }
     limit = channel_limits.get(channel, "적절한 길이")
     
-    # 3. 전략 변수 설정 (Orchestrator 입력 대응)
+    # 3. 전략 변수 설정 (Orchestrator int 입력 대응)
+    strategy_input = state["strategy"]
     
     # 기본값 설정
-    persona_name = target_persona if target_persona else "Trend Setter"
+    persona_name = "Trend Setter"
     communication_tone = "Casual & Trendy"
-    message_goal = crm_reason if crm_reason else "Product Recommendation"
+    message_goal = "Product Recommendation"
+    
+    if isinstance(strategy_input, int):
+        # Orchestrator가 Case(int)를 반환하는 경우 Goal 매핑
+        goals = {
+            0: "Best Seller Recommendation (Cold Start)",
+            1: "Interest-based Recommendation (Behavioral)", 
+            2: "Personalized Recommendation (Profile-based)",
+            3: "Repurchase Reminder (Hybrid)"
+        }
+        message_goal = goals.get(strategy_input, "Product Recommendation")
+    elif isinstance(strategy_input, dict):
+        # Dict 형태인 경우 (Future Proof)
+        persona_name = strategy_input.get("persona_name", persona_name)
+        message_goal = strategy_input.get("message_goal", message_goal)
+        communication_tone = strategy_input.get("communication_tone", communication_tone)
 
     user_prompt = user_prompt_template.format(
         user_name=user_data.name,
@@ -160,7 +149,6 @@ def message_writer_node(state: GraphState) -> GraphState:
         )
         
         generated_message = result["content"]
-        print("📝 Generated Message:\n", generated_message)
         usage = result["usage"]
         
         # 5. 비용 계산 (GPT-4 기준: Input $0.03/1k, Output $0.06/1k)
@@ -171,7 +159,15 @@ def message_writer_node(state: GraphState) -> GraphState:
         
         state["message"] = generated_message
         state["error"] = ""
-
+        
+        # 6. 토큰 및 비용 출력
+        print("\n" + "="*50)
+        print("💰 Token Usage & Cost (GPT-4)")
+        print(f"  - Input Tokens: {usage['prompt_tokens']}")
+        print(f"  - Output Tokens: {usage['completion_tokens']}")
+        print(f"  - Total Tokens: {usage['total_tokens']}")
+        print(f"  - Estimated Cost: ${total_cost:.4f}")
+        print("="*50 + "\n")
         
     except Exception as e:
         state["error"] = f"메시지 생성 중 오류 발생: {str(e)}"

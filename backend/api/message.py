@@ -4,6 +4,7 @@ GET /message 엔드포인트
 """
 from fastapi import APIRouter, Header, HTTPException, Query
 from models.message import MessageResponse, ErrorResponse
+from services.supabase_client import supabase_client
 from services.mock_data import get_mock_customer
 from services.user_service import get_customer_from_db, get_customer_list
 from graph import message_workflow
@@ -34,12 +35,8 @@ async def get_customers_endpoint():
     description="고객 ID를 기반으로 페르소나에 맞춘 개인화 CRM 메시지를 생성합니다.",
 )
 async def generate_message(
-    x_user_id: str = Header("user_0001", description="고객 ID"), # 기본값 user_0001 (DB 실제 데이터)
-    channel: Optional[str] = Query("SMS", description="메시지 채널 (SMS, KAKAO, EMAIL, APP_PUSH)"),
-    reason: Optional[str] = Query("신제품 출시 이벤트", description="CRM 발송 이유 (날씨, 할인행사, 일반홍보)"),
-    weather_detail: Optional[str] = Query(None, description="날씨 상세 정보 (예: 폭염 주의보, 건조한 가을) - reason='날씨'일 때 필수"),
-    brand: Optional[str] = Query("이니스프리", description="선택된 브랜드 (없을 경우 자동 추천)"), # 기본값 설정
-    persona: Optional[str] = Query("P1", description="선택된 페르소나 (예: P1, P2)") # 기본값 설정
+    x_user_id: str = Header(..., description="고객 ID"),
+    channel: Optional[str] = Query("APPPUSH", description="메시지 채널 (APPPUSH, SMS, KAKAO, EMAIL)"),
 ):
     """
     개인화 메시지 생성 API
@@ -53,22 +50,69 @@ async def generate_message(
         
     Returns:
         MessageResponse: 생성된 메시지 응답
-    """
+        
+    Raises:
+        HTTPException: 고객 정보를 찾을 수 없거나 메시지 생성 실패 시
+    # 1. 고객 데이터 조회 (Supabase -> Fallback to Mock)
+    db_user = supabase_client.get_user(x_user_id)
     
-    # [Dev Mode] 프론트엔드 연결 전 테스트를 위해 강제로 값을 덮어쓰거나 로그 출력
-    # 실제 프론트엔드 연동 시에는 아래 주석 처리된 부분들을 제거하거나 조정해야 함
-    print(f"📨 [TEST REQUEST] User: {x_user_id}, Channel: {channel}, Reason: {reason}, Detail: {weather_detail}, Brand: {brand}, Persona: {persona}")
+    customer = None
+    
+    if db_user:
+        # DB Dict -> CustomerProfile 변환
+        try:
+            from models.user import CustomerProfile, LastPurchase, ShoppingBehavior, CouponProfile, LastEngagement
+            
+            # Pydantic 모델 변환
+            customer = CustomerProfile(
+                user_id=db_user.get("user_id"),
+                name=db_user.get("name"),
+                age_group=db_user.get("age_group"),
+                gender=db_user.get("gender"),
+                membership_level=db_user.get("membership_level"),
+                skin_type=db_user.get("skin_type", []),
+                skin_concerns=db_user.get("skin_concerns", []),
+                preferred_tone=db_user.get("preferred_tone"),
+                keywords=db_user.get("keywords", []),
+                acquisition_channel=db_user.get("acquisition_channel", "Unknown"),
+                average_order_value=db_user.get("average_order_value", 0),
+                average_repurchase_cycle_days=db_user.get("average_repurchase_cycle_days", 30),
+                repurchase_cycle_alert=db_user.get("repurchase_cycle_alert", False),
+                
+                last_purchase=LastPurchase(**db_user["last_purchase"]) if db_user.get("last_purchase") else None,
+                purchase_history=db_user.get("purchase_history", []),
+                
+                shopping_behavior=ShoppingBehavior(**db_user.get("shopping_behavior", {
+                    "event_participation": "Low", 
+                    "cart_abandonment_rate": "Rare", 
+                    "price_sensitivity": "Medium"
+                })),
+                
+                coupon_profile=CouponProfile(**db_user.get("coupon_profile", {
+                    "history": [], 
+                    "propensity": "Balanced", 
+                    "preferred_type": "Percentage_Off"
+                })),
+                
+                last_engagement=LastEngagement(**db_user.get("last_engagement", {})),
+                cart_items=db_user.get("cart_items", []),
+                recently_viewed_items=db_user.get("recently_viewed_items", [])
+            )
+        except Exception as e:
+            print(f"Error converting DB user data: {e}")
+            customer = None
 
-    # 1. 고객 데이터 조회
-    # customer = get_mock_customer(x_user_id)
-    customer = get_customer_from_db(x_user_id)
+    # Fallback to Mock Data if DB failed or empty
+    if not customer:
+        print(f"User '{x_user_id}' not found in DB. Trying Mock Data...")
+        customer = get_mock_customer(x_user_id)
     
     if not customer:
         raise HTTPException(
             status_code=404,
             detail=f"고객 ID '{x_user_id}'를 찾을 수 없습니다."
         )
-    
+        
     # 2. LangGraph 워크플로우 실행
     try:
         initial_state = {
