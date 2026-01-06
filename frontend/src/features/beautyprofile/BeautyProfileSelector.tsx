@@ -10,18 +10,13 @@ import {
 } from '../../data/schemaData';
 
 const BeautyProfileSelector = () => {
-  const { simulationData, setSimulationData } = useAppStore();
+  const { simulationData, setSimulationData, activeOptions } = useAppStore();
 
-  // 스타일 정의 (컨테이너 스타일 제거됨)
   const labelStyle = "block text-xs font-black uppercase mb-2 tracking-wider text-gray-700";
-  // Select Box 스타일
   const selectStyle = "w-full p-2.5 font-bold border-2 border-black bg-white focus:outline-none focus:bg-yellow-50 focus:ring-2 focus:ring-black shadow-sm transition-colors";
-  // Multi-select Box 스타일 (스크롤 가능 영역)
   const multiSelectBoxStyle = "w-full p-2 border-2 border-black bg-white h-32 overflow-y-auto space-y-1 shadow-sm scrollbar-thin scrollbar-thumb-black scrollbar-track-gray-100";
-  // 체크박스 항목 스타일
   const checkboxItemStyle = "flex items-center gap-2 cursor-pointer hover:bg-yellow-100 p-1.5 transition-colors select-none";
 
-  // [Type Guard] 멀티 셀렉트가 가능한 키만 추출 (preferred_tone 제외)
   type MultiSelectField = keyof Pick<SimulationData, 'skin_type' | 'skin_concerns' | 'keywords'>;
 
   // 멀티 셀렉트 핸들러 (타입 안전성 확보)
@@ -45,17 +40,19 @@ const BeautyProfileSelector = () => {
         <div>
           <label className={labelStyle}>Skin Type (Multi)</label>
           <div className={multiSelectBoxStyle}>
-            {Object.entries(SKIN_TYPE_OPTIONS).map(([key, label]) => (
+            {(activeOptions?.skinTypes ?? []).map((key) => (
               <label key={key} className={checkboxItemStyle}>
-                <input 
+                <input
                   type="checkbox"
                   checked={simulationData.skin_type.includes(key)}
                   onChange={() => handleMultiSelect('skin_type', key)}
                   className="w-4 h-4 text-black border-2 border-black focus:ring-0 rounded-none checked:bg-black checked:hover:bg-black"
                 />
-                <span className="text-sm font-bold">{label}</span>
+                <span className="text-sm font-bold">
+                  {SKIN_TYPE_OPTIONS[key as keyof typeof SKIN_TYPE_OPTIONS] ?? key}
+                </span>
               </label>
-            ))}
+            ))}            
           </div>
         </div>
 
@@ -63,51 +60,65 @@ const BeautyProfileSelector = () => {
         <div>
           <label className={labelStyle}>Skin Concerns (Multi)</label>
           <div className={multiSelectBoxStyle}>
-            {Object.entries(SKIN_CONCERN_OPTIONS).map(([key, label]) => (
+            {(activeOptions?.concerns ?? []).map((key) => (
               <label key={key} className={checkboxItemStyle}>
-                <input 
+                <input
                   type="checkbox"
                   checked={simulationData.skin_concerns.includes(key)}
                   onChange={() => handleMultiSelect('skin_concerns', key)}
                   className="w-4 h-4 text-black border-2 border-black focus:ring-0 rounded-none checked:bg-black checked:hover:bg-black"
                 />
-                <span className="text-sm font-bold">{label}</span>
+                <span className="text-sm font-bold">
+                  {SKIN_CONCERN_OPTIONS[key as keyof typeof SKIN_CONCERN_OPTIONS] ?? key}
+                </span>
               </label>
-            ))}
+             ))}
           </div>
         </div>
 
         {/* 3. Preferred Tone (Single) */}
         <div>
           <label className={labelStyle}>Preferred Tone (Single)</label>
-          <div className="relative">
-            <select 
-              value={simulationData.preferred_tone} 
-              onChange={(e) => setSimulationData({ preferred_tone: e.target.value })}
-              className={selectStyle}
-            >
-              {Object.entries(TONE_OPTIONS).map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-          </div>
+
+          {activeOptions.tone.length === 0 ? (
+            <div className="w-full p-2.5 font-bold border-2 border-black bg-gray-100 shadow-sm">
+              No need to select tone for the chosen persona.
+            </div>
+          ) : (
+            <div className="relative">
+              <select
+                value={simulationData.preferred_tone}
+                onChange={(e) => setSimulationData({ preferred_tone: e.target.value })}
+                className={selectStyle}
+              >
+                {activeOptions.tone.map((key) => (
+                  <option key={key} value={key}>
+                    {TONE_OPTIONS[key as keyof typeof TONE_OPTIONS] ?? key}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
+
 
         {/* 4. Keywords (Multi) */}
         <div>
           <label className={labelStyle}>Target Keywords (Multi)</label>
           <div className={multiSelectBoxStyle}>
-            {Object.entries(KEYWORD_OPTIONS).map(([key, label]) => (
-              <label key={key} className={checkboxItemStyle}>
-                <input 
-                  type="checkbox"
-                  checked={simulationData.keywords.includes(key)}
-                  onChange={() => handleMultiSelect('keywords', key)}
-                  className="w-4 h-4 text-black border-2 border-black focus:ring-0 rounded-none checked:bg-black checked:hover:bg-black"
-                />
-                <span className="text-sm font-bold">{label}</span>
-              </label>
-            ))}
+            {(activeOptions?.keywords ?? []).map((key) => (
+            <label key={key} className={checkboxItemStyle}>
+              <input
+                type="checkbox"
+                checked={simulationData.keywords.includes(key)}
+                onChange={() => handleMultiSelect('keywords', key)}
+                className="w-4 h-4 text-black border-2 border-black focus:ring-0 rounded-none checked:bg-black checked:hover:bg-black"
+              />
+              <span className="text-sm font-bold">
+                {KEYWORD_OPTIONS[key as keyof typeof KEYWORD_OPTIONS] ?? key}
+              </span>
+            </label>
+           ))}
           </div>
         </div>
       </div>

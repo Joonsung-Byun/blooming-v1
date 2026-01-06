@@ -37,3 +37,5 @@ export const PERSONA_DB = {
 } as const;
 
 export type PersonaId = keyof typeof PERSONA_DB;
+
+// 해당 페르소나 타입 설명은 supabase에 jsonb형식으로 저장 완료. 거기서 뽑아쓰는 방식으로 변경 필요.

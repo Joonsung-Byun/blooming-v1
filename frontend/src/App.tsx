@@ -1,7 +1,5 @@
 import { CampaignSelector } from './features/campaign/CampaignSelector';
 import PersonaGrid from './features/persona/PersonaGrid'; 
-
-// [수정 포인트] 중괄호 { }를 제거했습니다. (default export를 불러오기 위함)
 import BeautyProfileSelector from './features/beautyprofile/BeautyProfileSelector'; 
 
 import { ChannelSelector } from './features/channel/ChannelSelector'; 
@@ -10,16 +8,17 @@ import { StickySummary } from './features/shared/StickySummary';
 function App() {
   return (
     <div className="min-h-screen bg-[#f8f9fa] p-8 font-sans text-gray-900">
-      {/* 헤더 */}
-      <header className="max-w-6xl mx-auto mb-10 flex items-center gap-4">
-        <div className="w-12 h-12 bg-black text-white flex items-center justify-center font-black text-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]">
-          D
-        </div>
-        <div>
-          <h1 className="text-2xl font-black tracking-tighter">DAPANDA</h1>
-          <p className="text-xs tracking-widest opacity-60">CRM MESSAGE GENERATOR v2.0</p>
-        </div>
-      </header>
+      {/* Header */}
+        <header className="max-w-6xl mx-auto mb-12">
+          <div className="inline-block bg-black px-5 py-4 rounded-sm">
+            <h1 className="text-2xl font-extrabold tracking-tight text-white leading-none">
+              DAPANDA
+            </h1>
+            <p className="mt-1 text-[11px] tracking-widest text-white/60 leading-none">
+              CRM MESSAGE GENERATOR FOR BEAUTY BRANDS
+            </p>
+          </div>
+        </header>   
 
       {/* 메인 레이아웃 */}
       <main className="max-w-6xl mx-auto grid grid-cols-12 gap-8">

@@ -49,7 +49,7 @@ export function CampaignSelector() {
             {INTENTIONS.map((item) => (
               <div key={item.id} className="relative flex-1 group">
                 <button
-                  onClick={() => setIntention(item.id)}
+                  onClick={() => setIntention(intention === item.id ? null : item.id)}
                   onMouseEnter={() => setHoveredId(item.id)}
                   onMouseLeave={() => setHoveredId(null)}
                   className={`
