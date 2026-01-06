@@ -4,6 +4,7 @@ OpenAI GPT-5 API를 사용한 메시지 생성
 """
 from typing import TypedDict
 from services.llm_client import llm_client
+from services.crm_history_service import crm_history_service
 from utils.prompt_loader import load_prompt_template
 from models.user import CustomerProfile
 
@@ -17,6 +18,8 @@ class GraphState(TypedDict):
     brand_tone: dict
     channel: str
     message: str
+    weather: str  # [NEW]
+    intent: str   # [NEW]
     compliance_passed: bool
     retry_count: int
     error: str
@@ -27,7 +30,7 @@ class GraphState(TypedDict):
 
 def message_writer_node(state: GraphState) -> GraphState:
     """
-    Message Writer Node
+    Message Writer Node with history reuse
     
     OpenAI GPT API를 호출하여 개인화된 메시지를 생성합니다.
     """
@@ -37,17 +40,51 @@ def message_writer_node(state: GraphState) -> GraphState:
     brand_tone = state["brand_tone"]
     channel = state.get("channel", "APPPUSH")
     retry_count = state.get("retry_count", 0)
-    error_reason = state.get("error_reason", "")  # Compliance 실패 이유 가져오기
+    error_reason = state.get("error_reason", "")
     
+    # [NEW] Context Variables
+    weather = state.get("weather", "Sunny")
+    intent = state.get("intent", "Discovery")
+    brand_name = product_data['brand']
+    persona_name = "Trend Setter" # Default
+    
+    # 전략에서 persona 추출
+    strategy_input = state["strategy"]
+    if isinstance(strategy_input, dict):
+        persona_name = strategy_input.get("persona_name", persona_name)
+    
+    beauty_profile = {
+        "skin_type": user_data.skin_type,
+        "skin_concerns": user_data.skin_concerns,
+        "keywords": user_data.keywords,
+        "preferred_tone": user_data.preferred_tone,
+        "age_group": user_data.age_group,
+        "gender": user_data.gender
+    }
+
+    print(f"🧐 CRM Cache Check: {brand_name}, {persona_name}, {intent}, {weather}")
+
+    # 1. CRM History Cache Check
+    cached_msg = crm_history_service.find_message(
+        brand=brand_name,
+        persona=persona_name,
+        intent=intent,
+        weather=weather,
+        beauty_profile=beauty_profile
+    )
+    
+    if cached_msg and retry_count == 0:
+        print("⚡️ CRM Cache Hit! Reusing message.")
+        state["message"] = cached_msg
+        state["error"] = ""
+        state["success"] = True
+        return state
+
     import json
     import os
 
-    # print(f"🖋️ Message Writer Node 시작... {state}")
-
-    # 1. 프롬프트 템플릿 로드
+    # 2. 프롬프트 템플릿 로드
     prompt_config = load_prompt_template("writer_prompt.yaml")
-    # Base Template (Identity only, or empty if fully replaced)
-    # 기존 템플릿의 {brand_name}, {tone_style} 부분은 아래 로직으로 대체됨
     
     user_prompt_template = prompt_config["user"]
     
@@ -59,7 +96,6 @@ def message_writer_node(state: GraphState) -> GraphState:
     except FileNotFoundError:
         crm_guidelines = {"brands": {}, "groups": {}}
 
-    brand_name = product_data['brand']
     
     # Dynamic System Prompt Construction
     if brand_name in crm_guidelines["brands"]:
@@ -68,6 +104,10 @@ def message_writer_node(state: GraphState) -> GraphState:
         
         system_prompt = f"""
 당신은 {brand_name}의 전문 CRM 카피라이터입니다.
+
+[상황 정보]
+- 고객 의도: {intent}
+{f'- 날씨: {weather}' if intent == 'weather' and weather else ''}
 
 [그룹 가이드라인: {brand_cfg["group"]}]
 톤: {group_cfg["tone"]}
@@ -80,7 +120,6 @@ def message_writer_node(state: GraphState) -> GraphState:
 전략: {brand_cfg["focus"]}
 """
     else:
-        # Fallback to Legacy Logic
         print(f"⚠️ {brand_name}에 대한 CRM 가이드라인이 없습니다. 기본 템플릿을 사용합니다.")
         system_prompt_template = prompt_config["system"]
         tone_examples = "\n".join(f"- {ex}" for ex in brand_tone.get("tone_manner_examples", []))
@@ -90,6 +129,12 @@ def message_writer_node(state: GraphState) -> GraphState:
             tone_style=brand_tone['tone_manner_style'],
             tone_examples=tone_examples
         )
+        
+        # [MODIFIED] intent에 따라 추가 프롬프트 분기
+        if intent == "weather" and weather:
+            system_prompt += f"\n\n[추가 상황 - 날씨]\n현재 날씨: {weather}\n(날씨에 맞는 톤앤매너와 제품 추천 멘트를 녹여내세요.)"
+        
+        system_prompt += f"\n\n[고객 의도]\n{intent}"
 
     # 재시도인 경우 Compliance 실패 이유를 프롬프트에 추가
     if retry_count > 0 and error_reason:
@@ -108,20 +153,64 @@ def message_writer_node(state: GraphState) -> GraphState:
 """
     
 
-    # 2. 채널 제한 텍스트 결정 (Restored)
-    channel_limits = {
-        "APP_PUSH": "50자 이내 (제목 1줄 + 본문 1줄, 이모지 포함 필수)",
-        "SMS": "45자 이내 (줄바꿈 없이 핵심만 2문장으로)",
-        "KAKAO": "1000자 이내 (첫 문장은 고객 이름과 인사로 시작, 줄바꿈 활용)",
-        "EMAIL": "제한 없음 (제목/본문 구분, 서론-본론-결론 구조)"
+    # 3. 채널별 상세 가이드라인 설정 [NEW]
+    CHANNEL_CONFIG = {
+        "APP_PUSH": {
+            "title_token_limit": 50,
+            "body_token_limit": 125,
+            "structure": "① Title (Hook)\n② Body (Benefit + Emoji)",
+            "guidelines": [
+                "Use emojis to grab attention.",
+                "Focus on immediate benefit.",
+                "Keep it very short and punchy."
+            ]
+        },
+        "SMS": {
+            "title_token_limit": 100,
+            "body_token_limit": 600,
+            "structure": "① Title (Clear Topic)\n② Body (Main Message)\n③ CTA (Link)",
+            "guidelines": [
+                "No special formatting (plain text only).",
+                "Get straight to the point.",
+                "Include a clear call to action link."
+            ]
+        },
+        "EMAIL": {
+            "title_token_limit": 50,
+            "body_token_limit": 600,
+            "structure": "① 공감/상황 제시 (1~2문장)\n② 개인화 포인트 (피부/날씨/이력)\n③ 제안 or 혜택\n④ CTA (링크/버튼 유도)",
+            "guidelines": [
+                "Use a professional yet engaging tone.",
+                "Clearly separate sections.",
+                "Focus on the 'Why' for the customer."
+            ]
+        },
+        "KAKAO": {
+            "title_token_limit": 100,
+            "body_token_limit": 600,
+            "structure": "① Title (Eye-catching)\n② Greeting (Personalized)\n③ Key Benefit (Bulleted List)\n④ CTA",
+            "guidelines": [
+                "Use bullet points for readability.",
+                "Friendly and approachable tone.",
+                "Highlight key benefits clearly."
+            ]
+        }
     }
-    limit = channel_limits.get(channel, "적절한 길이")
     
-    # 3. 전략 변수 설정 (Orchestrator int 입력 대응)
-    strategy_input = state["strategy"]
+    # 해당 채널 설정 가져오기 (없으면 APP_PUSH 기본값)
+    ch_cfg = CHANNEL_CONFIG.get(channel, CHANNEL_CONFIG["APP_PUSH"])
     
-    # 기본값 설정
-    persona_name = "Trend Setter"
+    limit_text = f"""
+- 제목 길이: 최대 {ch_cfg['title_token_limit']} 토큰 (약 {ch_cfg['title_token_limit']//2} 단어)
+- 본문 길이: 최대 {ch_cfg['body_token_limit']} 토큰 (약 {ch_cfg['body_token_limit']//2} 단어)
+- 필수 구조:
+{ch_cfg['structure']}
+- 작성 지침:
+{chr(10).join(['  - ' + g for g in ch_cfg['guidelines']])}
+"""
+
+    
+    # 4. 전략 변수 설정
     communication_tone = "Casual & Trendy"
     message_goal = "Product Recommendation"
     
@@ -135,8 +224,6 @@ def message_writer_node(state: GraphState) -> GraphState:
         }
         message_goal = goals.get(strategy_input, "Product Recommendation")
     elif isinstance(strategy_input, dict):
-        # Dict 형태인 경우 (Future Proof)
-        persona_name = strategy_input.get("persona_name", persona_name)
         message_goal = strategy_input.get("message_goal", message_goal)
         communication_tone = strategy_input.get("communication_tone", communication_tone)
 
@@ -157,24 +244,25 @@ def message_writer_node(state: GraphState) -> GraphState:
         message_goal=message_goal,
         communication_tone=communication_tone,
         channel=channel,
-        limit_text=limit
+        limit_text=limit_text # [MODIFIED] Detailed config text injected
     )
     
     try:
-        # 4. LLM 호출
+        # 5. LLM 호출
         result = llm_client.generate_chat_completion(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.7
+            temperature=0.7,
+            max_tokens=ch_cfg['body_token_limit'] + 100 # [NEW] Max Output Tokens Control
         )
         
         generated_message = result["content"]
         print("📝 Generated Message:\n", generated_message)
         usage = result["usage"]
         
-        # 5. 비용 계산 (GPT-4 기준: Input $0.03/1k, Output $0.06/1k)
+        # 6. 비용 계산 (GPT-4 기준: Input $0.03/1k, Output $0.06/1k)
         # Note: 모델 버전에 따라 가격이 다를 수 있음. 기본 GPT-4 가격 적용.
         input_cost = (usage["prompt_tokens"] / 1000) * 0.03
         output_cost = (usage["completion_tokens"] / 1000) * 0.06
@@ -182,6 +270,17 @@ def message_writer_node(state: GraphState) -> GraphState:
         
         state["message"] = generated_message
         state["error"] = ""
+        
+        # 7. [NEW] Save to CRM History (성공 시에만)
+        if not error_reason: # 재시도가 아닐 때만 저장 (안전한 메시지만)
+             crm_history_service.save_message(
+                brand=brand_name,
+                persona=persona_name,
+                intent=intent,
+                weather=weather,
+                beauty_profile=beauty_profile,
+                message_content=generated_message
+            )
 
         
     except Exception as e:

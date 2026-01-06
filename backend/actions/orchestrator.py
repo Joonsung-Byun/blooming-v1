@@ -18,6 +18,8 @@ class GraphState(TypedDict):
     brand_tone: dict
     channel: str
     message: str
+    weather: str  # [NEW] 날씨 정보
+    intent: str   # [NEW] 고객 의도 (구매/탐색/정보 등)
     compliance_passed: bool
     retry_count: int
     error: str
@@ -50,10 +52,21 @@ def orchestrator_node(state: GraphState) -> GraphState:
     # 2. 추천 브랜드 결정
     recommended_brand = determine_recommended_brand(user_data)
     
+    # [NEW] 3. Mock Weather & Intent (추후 실제 데이터 연동 필요)
+    import random
+    mock_intent = random.choice(["regular", "events", "weather"])
+    
+    # Weather is only relevant if intent is 'weather'
+    mock_weather = None
+    if mock_intent == "weather":
+        mock_weather = random.choice(["Sunny", "Cloudy", "Rainy", "Dry"])
+    
     # State 업데이트
     state["strategy"] = strategy_case
     state["recommended_brand"] = recommended_brand
     state["retry_count"] = 0
+    state["weather"] = mock_weather
+    state["intent"] = mock_intent
     
     print(f"🎯 Orchestrator 결과:")
     print(f"  - Strategy Case: {strategy_case} ({get_strategy_name(strategy_case)})")
