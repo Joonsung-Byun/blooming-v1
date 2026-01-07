@@ -28,12 +28,12 @@ class GraphState(TypedDict):
     user_id: str
     user_data: CustomerProfile
     recommended_brand: List[str]
-    strategy: int
     recommended_product_id: str
     product_data: dict
     brand_tone: dict
     channel: str
     message: str
+    message_template: str # [NEW] 템플릿 메시지 (저장용)
     compliance_passed: bool
     retry_count: int
     error: str
@@ -44,6 +44,11 @@ class GraphState(TypedDict):
     llm_reasoning: str
     confidence_score: float
     retrieved_legal_rules: list[Dict[str, Any]]  # 캐싱용: 한 번 검색한 규칙 재사용
+    # RecSys Orchestrator Outputs (for Saving)
+    crm_reason: str
+    weather_detail: str
+    target_persona: str
+
 
 # Supabase 클라이언트 (선택적 - Rule DB가 없으면 Mock 사용)
 try:
@@ -569,7 +574,7 @@ def compliance_check_node(state: GraphState) -> GraphState:
         if not passed:
             state["retry_count"] = retry_count + 1
 
-            if state["retry_count"] >= 5:
+            if state["retry_count"] >= settings.max_retry_count:
                 print(f"  ❌ [Compliance Check] 최대 재시도 횟수 도달. 최종 실패 처리.")
                 state["compliance_passed"] = False
                 
@@ -612,6 +617,10 @@ def compliance_check_node(state: GraphState) -> GraphState:
             print(f"✅ [Compliance Check PASSED] - 시도 {retry_count + 1}/5")
             print("="*80)
             print(f"신뢰도: {confidence:.2%}")
+            
+            # [MOVED] CRM History 저장은 save_crm_message_node에서 처리
+            # (compliance_check.py는 검수 로직에만 집중)
+            
             print(f"\n[LLM 판단 근거]\n{reasoning}")
             print("="*80 + "\n")
         
