@@ -1,6 +1,8 @@
 """
-Message Generation API
-GET /message 엔드포인트
+backend/api/message.py
+[Hybrid Mode] 
+- 상황 정보: 프론트엔드에서 수신
+- 고객 정보: 백엔드가 Supabase DB에서 직접 조회 (Fixed Logic)
 """
 from fastapi import APIRouter, Header, HTTPException, Query
 from models.message import MessageResponse, ErrorResponse
@@ -114,24 +116,41 @@ async def generate_message(
     # 2. LangGraph 워크플로우 실행
     try:
         initial_state = {
-            "user_id": x_user_id,
-            "user_data": customer,
-            "channel": channel,
-            "crm_reason": reason or "",
-            "weather_detail": weather_detail or "",  # 추가됨
-            "target_brand": brand or "",
-            "target_persona": persona or "",
-            "recommended_product_id": "",
-            "product_data": {},
-            "brand_tone": {},
-            "message": "",
+            "user_id": req.userId,
+            "user_data": customer_obj,
+            "channel": req.channel,
+            
+            "customer_name": customer_obj.name,
+            "skin_type": str(customer_obj.skin_type),
+            "skin_concerns": str(customer_obj.skin_concerns),
+            
+            "intention": req.intention,
+            "season": req.season or "계절 무관",
+            "weather_detail": req.weatherDetail or "좋은 날씨",
+            "brand_name": target_brand,
+            
+            # 기타 필수 필드
+            "product_name": "추천 상품",
+            "discounted_price": "0",
+            "discount_rate": "0",
+            "product_desc": "고객 맞춤 추천 제품",
+            "review_keywords": "긍정 리뷰",
+            "tone_style": "친절한",
+            "tone_examples": "",
+            "persona_name": req.persona,
+            "message_goal": "소통",
+            "communication_tone": "부드러움",
+            "limit_text": "200자",
+            "target_brand": target_brand,
+            "target_persona": req.persona,
+            "recommended_product_id": 101,
             "compliance_passed": False,
             "retry_count": 0,
             "error": "",
-            "error_reason": "",  # Compliance 실패 이유
-            "success": False,  # 초기값
+            "success": False
         }
-        
+
+        print("🔥 AI 메시지 생성 시작...")
         result = message_workflow.invoke(initial_state)
         
         # 3. 결과 검증
@@ -171,11 +190,6 @@ async def generate_message(
             )
     
     except Exception as e:
-        print(f"❌ 예외 발생: {type(e).__name__}: {str(e)}")
-        import traceback
+        print(f"❌ 로직 에러: {e}")
         traceback.print_exc()
-        raise HTTPException(
-            status_code=500,
-            detail=f"메시지 생성 중 오류 발생: {str(e)}"
-        )
-
+        raise HTTPException(status_code=500, detail=str(e))
