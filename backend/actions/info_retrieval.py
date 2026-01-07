@@ -44,6 +44,8 @@ def info_retrieval_node(state: GraphState) -> GraphState:
     user_data = state["user_data"]
     recommended_product_id = state.get("recommended_product_id") # Input으로 들어올 수도 있음
     product_data_input = state.get("product_data")
+    recommended_brand = state.get("recommended_brand", "")
+    intent = state.get("intent", "")  # intent 가져오기 (빈 문자열, "regular", "event", "weather")
     
     recommended_product = None
     
@@ -55,7 +57,7 @@ def info_retrieval_node(state: GraphState) -> GraphState:
         if not recommended_product_id:
             state["recommended_product_id"] = product_data_input.get("product_id")
     else:
-        # 1. 상품 식별 (Input ID 우선, 없으면 추천 로직)
+        # 1. 상품 식별 (RecSys API 우선, Input ID 차순)
         if recommended_product_id:
             # Input으로 ID가 주어졌다면 해당 상품 조회
             from services.supabase_client import supabase_client
@@ -69,11 +71,11 @@ def info_retrieval_node(state: GraphState) -> GraphState:
                 # DB 조회 실패 시 Mock Fallback
                 recommended_product = get_mock_product(recommended_product_id)
                 if not recommended_product:
-                    # Mock도 없으면 기본 추천 로직 수행
-                    recommended_product = recommend_product_for_customer(user_data)
+                    # Mock도 없으면 RecSys API 호출
+                    recommended_product = call_recsys_api(user_data, recommended_brand, intent)
         else:
-            # ID가 없으면 추천 로직 수행
-            recommended_product = recommend_product_for_customer(user_data)
+            # ID가 없으면 RecSys API 호출
+            recommended_product = call_recsys_api(user_data, recommended_brand, intent)
         
         # 새로 조회된 경우 Brand Name 추출
         brand_name = recommended_product.brand
@@ -169,6 +171,105 @@ def get_brand_tone_from_guideline(brand_name_en: str) -> dict:
 
 
 def convert_db_to_product_model(db_data: dict):
+    """DB 데이터를 Product 모델 객체로 변환 (Schema Based)"""
+    from models.product import Product, ProductCategory, ProductPrice, ProductReview, ProductAnalytics
+    
+    # Keywords Parsing (Text -> List)
+    keywords_raw = db_data.get("keywords", "")
+    keywords_list = [k.strip() for k in keywords_raw.split(",")] if keywords_raw else []
+    
+    return Product(
+        product_id=str(db_data.get("id", "")),
+        brand=db_data.get("brand", "Unknown"),
+        name=db_data.get("name", "Unknown Product"),
+        category=ProductCategory(
+            major=db_data.get("category_major") or "",
+            middle=db_data.get("category_middle") or "",
+            small=db_data.get("category_small") or ""
+        ),
+        price=ProductPrice(
+            original_price=db_data.get("price_original", 0),
+            discounted_price=db_data.get("price_final", 0),
+            discount_rate=db_data.get("discount_rate", 0)
+        ),
+        review=ProductReview(
+            score=db_data.get("review_score", 0.0),
+            count=db_data.get("review_count", 0),
+            top_keywords=keywords_list
+        ),
+        description_short=db_data.get("name", ""), # Description 컬럼 부재로 name 사용
+        analytics=ProductAnalytics(
+            skin_type=db_data.get("analytics", {}).get("skin_type"),
+            age_group=db_data.get("analytics", {}).get("age_group")
+        ) if db_data.get("analytics") else None
+    )
+
+
+def call_recsys_api(user_data, target_brand: str = "", intent: str = ""):
+    """
+    RecSys API를 호출하여 상품 추천 받기
+    
+    Args:
+        user_data: CustomerProfile 객체
+        target_brand: 추천 브랜드 (빈 문자열이면 모든 브랜드)
+        intent: 추천 의도 ("": regular, "event": 할인율 높은 제품, "weather": 날씨별 제품)
+        
+    Returns:
+        Product 객체 또는 Mock fallback
+    """
+    try:
+        # RecSys API 호출
+        recsys_url = settings.RecSys_API_URL
+        
+        payload = {
+            "user_id": user_data.user_id,
+            "user_data": user_data.model_dump(),  # Pydantic v2: model_dump()
+            "target_brand": [target_brand] if target_brand else [],
+            "intention": intent if intent else ""
+        }
+        
+        print(f"[RecSys API] Calling {recsys_url} with intent={intent}, brand={target_brand}")
+        
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(recsys_url, json=payload)
+            response.raise_for_status()
+            result = response.json()
+        
+        print(f"[RecSys API] Success: {result.get('product_name')} (ID: {result.get('product_id')})")
+        
+        # RecSys API 응답을 Product 객체로 변환
+        product_data = result.get("product_data", {})
+        from models.product import Product, ProductCategory, ProductPrice, ProductReview
+        
+        return Product(
+            product_id=product_data.get("product_id", result.get("product_id", "UNKNOWN")),
+            brand=product_data.get("brand", "Unknown"),
+            name=product_data.get("name", result.get("product_name", "Unknown Product")),
+            category=ProductCategory(
+                major=product_data.get("category", {}).get("major", ""),
+                middle=product_data.get("category", {}).get("middle", ""),
+                small=product_data.get("category", {}).get("small", "")
+            ),
+            price=ProductPrice(
+                original_price=product_data.get("price", {}).get("original_price", 0),
+                discounted_price=product_data.get("price", {}).get("discounted_price", 0),
+                discount_rate=product_data.get("price", {}).get("discount_rate", 0)
+            ),
+            review=ProductReview(
+                score=product_data.get("review", {}).get("score", 0.0),
+                count=product_data.get("review", {}).get("count", 0),
+                top_keywords=product_data.get("review", {}).get("top_keywords", [])
+            ),
+            description_short=product_data.get("description_short", result.get("product_name", ""))
+        )
+        
+    except Exception as e:
+        print(f"[RecSys API] Error: {e}")
+        # Fallback to mock recommendation
+        return recommend_product_for_customer(user_data)
+
+
+def convert_db_to_product_model_old(db_data: dict):
     """DB 데이터를 Product 모델 객체로 변환 (Schema Based)"""
     from models.product import Product, ProductCategory, ProductPrice, ProductReview, ProductAnalytics
     
