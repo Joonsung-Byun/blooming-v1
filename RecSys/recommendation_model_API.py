@@ -632,5 +632,3 @@ async def get_recommendation(request_data: Any) -> Dict[str, Any]:
         "score": 0.0,
         "reason": "상품 추천에 실패했습니다.",
     }
-
-
