@@ -35,8 +35,12 @@ async def get_customers_endpoint():
     description="고객 ID를 기반으로 페르소나에 맞춘 개인화 CRM 메시지를 생성합니다.",
 )
 async def generate_message(
-    x_user_id: str = Header(..., description="고객 ID"),
-    channel: Optional[str] = Query("APPPUSH", description="메시지 채널 (APPPUSH, SMS, KAKAO, EMAIL)"),
+    x_user_id: str = Header("user_0001", description="고객 ID"),
+    channel: Optional[str] = Query("SMS", description="메시지 채널 (APPPUSH, SMS, KAKAO, EMAIL)"),
+    reason: Optional[str] = Query("신제품 출시 이벤트", description="CRM 발송 이유 (날씨, 할인행사, 일반홍보)"),
+    weather_detail: Optional[str] = Query(None, description="날씨 상세 정보 (예: 폭염 주의보, 건조한 가을) - reason='날씨'일 때 필수"),
+    brand: Optional[str] = Query("이니스프리", description="선택된 브랜드 (없을 경우 자동 추천)"),
+    persona: Optional[str] = Query("P1", description="선택된 페르소나 (예: P1, P2)")
 ):
     """
     개인화 메시지 생성 API
@@ -53,6 +57,7 @@ async def generate_message(
         
     Raises:
         HTTPException: 고객 정보를 찾을 수 없거나 메시지 생성 실패 시
+    """
     # 1. 고객 데이터 조회 (Supabase -> Fallback to Mock)
     db_user = supabase_client.get_user(x_user_id)
     
