@@ -79,7 +79,7 @@ export function StickySummary() {
     if (isGenerating) return;
 
     // 선택된 고객의 user_id 사용 (없으면 기본값 "user_0001")
-    const targetUserId = selectedCustomer?.user_id || 'user_0001';
+    const targetUserId = selectedCustomer?.user_id;
     setIsGenerating(true);
     setGeneratedResult(null);
 
@@ -118,15 +118,8 @@ export function StickySummary() {
       if (message) {
         setGeneratedResult(message);
 
-        // 3) History Save (로그 저장)
-        await LogService.saveLog({
-          user_id: String(targetUserId),
-          channel: selectedChannel,
-          intention: intention || 'PROMOTION',
-          content: message,
-          beauty_profile: simulationData, // 기존 로그 스키마 유지(선택)
-        });
-
+        // 3) History Refresh (로그 새로고침) - 백엔드 저장을 기다린 후 조회
+        // 프론트엔드에서 직접 저장하지 앟고, 백엔드 DB(crm_message_history)를 조회하도록 변경
         await loadLogs(String(targetUserId));
       } else {
         console.error('메시지 응답 없음', result);

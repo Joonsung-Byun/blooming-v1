@@ -28,25 +28,9 @@ def retrieve_crm_node(state: GraphState) -> GraphState:
         crm_reason = state.get("crm_reason", "regular")
         weather_detail = state.get("weather_detail", "")
         
-        # Persona Name Resolution (Optional for Signature, but good for consistency)
-        # Signature uses 'persona' string. In saving we used name. Here we might need name too if signature depends on it.
-        # Let's use the same logic as save/writer.
-        # Note: If signature uses 'persona' as just the ID or generic, it's easier.
-        # Previous logic used 'persona_name' from DB.
-        # I need to duplicate the persona loading logic or rely on `target_persona` ID if I change the signature strategy.
-        # Wait, previous `message_writer` loaded `persona_db`.
-        # I should load it here too to match the signature.
-        
-        base_path = "backend/actions/persona_db.json" # Relative path might be tricky, let's use os
-        import os
-        base_path = os.path.dirname(os.path.dirname(__file__))
-        persona_db_path = os.path.join(base_path, "actions/persona_db.json")
-        try:
-            with open(persona_db_path, "r", encoding="utf-8") as f:
-                pdb = json.load(f)
-                persona_name = pdb.get(str(target_pid), {}).get("persona_name", "Unknown")
-        except:
-            persona_name = "Unknown"
+        # [Modified] Use Persona ID instead of Name for Cache Signature Strictness
+        # Previously loaded name from DB, but now we save/retrieve by ID ("1", "2")
+        pass
 
         # 2. Strict Beauty Profile
         beauty_profile = {
@@ -59,7 +43,7 @@ def retrieve_crm_node(state: GraphState) -> GraphState:
         # 3. Check Cache
         cached_msg = crm_history_service.find_message(
             brand=product_info["brand"],
-            persona=persona_name,
+            persona=str(target_pid),
             intent=crm_reason,
             weather=weather_detail,
             product_name=product_info["name"],

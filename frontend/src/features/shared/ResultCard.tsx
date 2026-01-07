@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 
 interface ResultCardProps {
   content: string;
@@ -28,10 +30,19 @@ export function ResultCard({ content, channel }: ResultCardProps) {
       </div>
 
       {/* 본문 영역 */}
-      <div className="p-4 bg-yellow-50 min-h-[120px]">
-        <p className="text-sm font-medium whitespace-pre-wrap leading-relaxed text-gray-900">
+      <div className="p-4 bg-yellow-50 min-h-[120px] text-sm text-gray-900 leading-relaxed">
+        <ReactMarkdown 
+          remarkPlugins={[remarkBreaks]}
+          components={{
+            ul: ({node, ...props}) => <ul className="list-disc pl-5 my-2" {...props} />,
+            ol: ({node, ...props}) => <ol className="list-decimal pl-5 my-2" {...props} />,
+            strong: ({node, ...props}) => <strong className="font-black" {...props} />,
+            a: ({node, ...props}) => <a className="text-blue-600 underline font-bold" {...props} />,
+            p: ({node, ...props}) => <p className="mb-1" {...props} />,
+          }}
+        >
           {content}
-        </p>
+        </ReactMarkdown>
       </div>
 
       {/* 푸터 / 액션 */}
