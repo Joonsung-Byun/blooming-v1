@@ -26,7 +26,8 @@ def setup_table():
     -- 1. Create Table
     CREATE TABLE IF NOT EXISTS crm_message_history (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+        -- KST(Asia/Seoul) 시간으로 저장 (TIMESTAMP WITHOUT TIME ZONE)
+        created_at TIMESTAMP DEFAULT (now() AT TIME ZONE 'Asia/Seoul'),
         brand TEXT NOT NULL,
         persona TEXT NOT NULL,
         intent TEXT NOT NULL,
