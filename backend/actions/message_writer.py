@@ -12,7 +12,6 @@ class GraphState(TypedDict):
     """LangGraph State 정의"""
     user_id: str
     user_data: CustomerProfile
-    strategy: dict
     recommended_product_id: str
     product_data: dict
     brand_tone: dict
@@ -26,6 +25,9 @@ class GraphState(TypedDict):
     error_reason: str  # Compliance 실패 이유
     success: bool  # API 응답용
     retrieved_legal_rules: list  # 캐싱용: Compliance 노드에서 한 번 검색한 규칙 재사용
+    # Optional inputs from Orchestrator that might be used here
+    crm_reason: str
+    target_persona: str
 
 
 def message_writer_node(state: GraphState) -> GraphState:
@@ -34,7 +36,6 @@ def message_writer_node(state: GraphState) -> GraphState:
     
     OpenAI GPT API를 호출하여 개인화된 메시지를 생성합니다.
     """
-    strategy = state["strategy"]
     user_data = state["user_data"]
     product_data = state["product_data"]
     brand_tone = state["brand_tone"]
@@ -259,7 +260,6 @@ def message_writer_node(state: GraphState) -> GraphState:
         )
         
         generated_message = result["content"]
-        print("📝 Generated Message:\n", generated_message)
         usage = result["usage"]
         
         # 6. 비용 계산 (GPT-4 기준: Input $0.03/1k, Output $0.06/1k)
