@@ -9,13 +9,14 @@ export function StickySummary() {
   const {
     intention,
     selectedPersonaId,
-    selectedCustomer,
     simulationData,
     isBrandTargeting,
     targetBrand,
     selectedChannel,
     personas,
     resetAll,
+
+    selectedCustomer, // ✅ 추가: 실제 고객 정보 (user_id 포함) 가져오기
 
     isGenerating,
     setIsGenerating,
