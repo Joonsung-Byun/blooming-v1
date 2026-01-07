@@ -167,36 +167,18 @@ def get_persona_recent_brands(personatype: str, target_user: CustomerProfile) ->
         print(f"🔎 [DB] Fetching similar users for persona: {target_p}")
         
         # [Optimization] Apply Filters on DB Side to bypass 1000 limit issue.
-        # Reverse Map (Kor -> Eng)
-        # Note: Maps are many-to-one sometimes, but here we assume simple inversion works for main keys.
+        # DB has Korean values, so we use target_user attributes directly without translation.
         
         query = supabase_client.client.table("user_data").select("*").eq("persona_id", target_p)
 
         # 1. Preferred Tone Filter
-        # User input is Korean (e.g., "웜톤"). Find English key.
-        target_tone_eng = None
-        for k, v in TONE_MAP.items():
-            if v == target_user.preferred_tone:
-                target_tone_eng = k
-                break
-        
-        if target_tone_eng:
-             query = query.eq("preferred_tone", target_tone_eng)
+        if target_user.preferred_tone:
+             query = query.eq("preferred_tone", target_user.preferred_tone)
              
-        # 2. Skin Type Filter (Subset Containment)
-        # We want users who have AT LEAST the target types. (Or Exact equality?)
-        # For now, let's use 'contains' which is safer for finding candidates.
-        # User: ["건성"] -> DB must have "Dry"
-        target_skin_eng = []
-        for ut in target_user.skin_type:
-            for k, v in SKIN_TYPE_MAP.items():
-                if v == ut:
-                    target_skin_eng.append(k)
-                    break
-        
-        if target_skin_eng:
-            # Postgres JSONB contains: column @> value
-            query = query.contains("skin_type", target_skin_eng)
+        # 2. Skin Type Filter (Value in List)
+        # Check if DB's skin_type (String) is in User's skin_type (List)
+        if target_user.skin_type:
+            query = query.in_("skin_type", target_user.skin_type)
 
         # Execute
         resp = query.execute()
@@ -208,7 +190,7 @@ def get_persona_recent_brands(personatype: str, target_user: CustomerProfile) ->
             print(f"⚠️ No users found for persona '{target_p}'.")
             return []
             
-        # Python-side Filtering (Strict Matching with Translation)
+        # Python-side Filtering (Strict Matching)
         similar_users_brands = []
         
         # Target User Data (Assuming Korean)
@@ -224,32 +206,34 @@ def get_persona_recent_brands(personatype: str, target_user: CustomerProfile) ->
             if row.get("user_id") == target_user.user_id:
                 continue
                 
-            # 1. Skin Type Match (Translate DB Eng -> Kor)
-            db_skin_types = row.get("skin_type", [])
-            row_skin_type_kor = set()
-            for t in db_skin_types:
-                # Map or keep original if not found
-                row_skin_type_kor.add(SKIN_TYPE_MAP.get(t, t))
-                
-            if row_skin_type_kor != user_skin_type:
+            # 1. Skin Type Match (Direct Comparison)
+            # DB is String in Korean (e.g., "지성"), User is List (e.g., ["지성", "복합성"])
+            # DB value must be in User's list (which matches the query 'in_' logic)
+            db_skin_type = row.get("skin_type")
+            if db_skin_type not in user_skin_type:
                 continue
                 
-            # 2. Skin Concerns Match
-            db_concerns = row.get("skin_concerns", [])
-            row_concerns_kor = set()
-            for c in db_concerns:
-                row_concerns_kor.add(CONCERN_MAP.get(c, c))
+            # 2. Skin Concerns Match (Direct Comparison with Overlap)
+            # DB is String "A, B" or List["A", "B"]?
+            # From inspection, it looked like String in inspect_db_values.py output: "트러블, 모공" (Type: str)
+            db_concerns_raw = row.get("skin_concerns")
+            db_concerns = set()
+            if isinstance(db_concerns_raw, list):
+                db_concerns = set(db_concerns_raw)
+            elif isinstance(db_concerns_raw, str):
+                db_concerns = set([c.strip() for c in db_concerns_raw.split(",") if c.strip()])
                 
-            if row_concerns_kor != user_skin_concerns:
-                continue
-                
+            # Logic: Intersection > 0 (At least one common concern)
+            # This matches the verified script logic
+            if not user_skin_concerns.intersection(db_concerns):
+                 continue
+
             # 3. Tone Match
             db_tone = row.get("preferred_tone")
-            row_tone_kor = TONE_MAP.get(db_tone, db_tone)
-            if row_tone_kor != user_tone:
-                # Try raw comparison just in case
-                if db_tone != user_tone:
-                    continue
+            if db_tone != user_tone:
+                continue
+                
+            # 4. Keywords Match
                 
             # 4. Keywords Match (Partial Overlap allowed or strict?)
             # Since full translation map is missing, let's try direct comparison 

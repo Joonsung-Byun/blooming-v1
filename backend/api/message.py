@@ -4,12 +4,13 @@ backend/api/message.py
 - 상황 정보: 프론트엔드에서 수신
 - 고객 정보: 백엔드가 Supabase DB에서 직접 조회 (Fixed Logic)
 """
-from fastapi import APIRouter, Header, HTTPException, Query
-from models.message import MessageResponse, ErrorResponse
+from fastapi import APIRouter, Header, HTTPException, Query, Body
+from models.message import MessageResponse, ErrorResponse, MessageRequest
 from services.supabase_client import supabase_client
 from services.user_service import get_customer_from_db, get_customer_list
 from graph import message_workflow
 from typing import Optional
+import traceback
 
 router = APIRouter()
 
@@ -24,7 +25,7 @@ async def get_customers_endpoint():
     """
     return get_customer_list()
 
-@router.get(
+@router.post(
     "/message",
     response_model=MessageResponse,
     responses={
@@ -36,47 +37,29 @@ async def get_customers_endpoint():
     description="고객 ID를 기반으로 페르소나에 맞춘 개인화 CRM 메시지를 생성합니다.",
 )
 async def generate_message(
-    x_user_id: str = Header("user_0002", description="고객 ID"),
-    channel: Optional[str] = Query("SMS", description="메시지 채널 (APPPUSH, SMS, KAKAO, EMAIL)"),
-    reason: Optional[str] = Query("신제품 출시 이벤트", description="CRM 발송 이유 (날씨, 할인행사, 일반홍보)"),
-    weather_detail: Optional[str] = Query(None, description="날씨 상세 정보 (예: 폭염 주의보, 건조한 가을) - reason='날씨'일 때 필수"),
-    brand: Optional[str] = Query(None, description="선택된 브랜드 (없을 경우 자동 추천)"),
-    persona: Optional[str] = Query("P1", description="선택된 페르소나 (예: P1, P2)")
+    request: MessageRequest
 ):
     """
     개인화 메시지 생성 API
-    
-    Args:
-        x_user_id: Header에서 추출한 고객 ID (기본값: U001 - 테스트용)
-        channel: 메시지 채널 (기본값: SMS)
-        reason: CRM 발송 목적 (기본값: 신제품 출시 이벤트)
-        brand: 특정 브랜드 지정 시 (기본값: None -> 자동 추천)
-        persona: 특정 페르소나 지정 시 (기본값: P1)
-        
-    Returns:
-        MessageResponse: 생성된 메시지 응답
-        
-    Raises:
-        HTTPException: 고객 정보를 찾을 수 없거나 메시지 생성 실패 시
     """
     # 0. Deduplication Check (중복 방지)
     # 특정 브랜드에 대해 최근 24시간 내에 발송된 메시지가 있는지 확인
-    if brand:
-        recent_msgs = supabase_client.get_recent_messages(x_user_id, days=1)
+    if request.targetBrand:
+        recent_msgs = supabase_client.get_recent_messages(request.userId, days=1)
         for msg in recent_msgs:
             # 브랜드가 일치하고, (옵션) 성공한 메시지인 경우
-            if msg.get('brand_name') == brand:
-                print(f"🚫 Duplicate message blocked for User {x_user_id}, Brand {brand}")
+            if msg.get('brand_name') == request.targetBrand:
+                print(f"🚫 Duplicate message blocked for User {request.userId}, Brand {request.targetBrand}")
                 # 프론트엔드에서 처리하기 쉽도록 429 Too Many Requests 또는 409 Conflict 반환
                 # 여기서는 409 Conflict 사용
                 raise HTTPException(
                     status_code=409, 
-                    detail=f"최근 24시간 내에 '{brand}' 브랜드에 대한 메시지가 이미 생성되었습니다."
+                    detail=f"최근 24시간 내에 '{request.targetBrand}' 브랜드에 대한 메시지가 이미 생성되었습니다."
                 )
 
     # 1. 고객 데이터 조회 (Supabase -> Fallback to Mock)
-    db_user = supabase_client.get_user(x_user_id)  
-    print(f"🧐 Fetching user data for ID: {x_user_id}") 
+    db_user = supabase_client.get_user(request.userId)  
+    print(f"🧐 Fetching user data for ID: {request.userId}") 
     
     customer = None
     
@@ -107,51 +90,42 @@ async def generate_message(
 
     # Fallback 없음: DB 실패 시 에러 처리
     if not customer:
-        print(f"User '{x_user_id}' not found in DB.")
+        print(f"User '{request.userId}' not found in DB.")
         raise HTTPException(
             status_code=404,
-            detail=f"고객 ID '{x_user_id}'를 찾을 수 없습니다."
+            detail=f"고객 ID '{request.userId}'를 찾을 수 없습니다."
         )
         
     # 2. LangGraph 워크플로우 실행
     try:
         initial_state = {
-            "user_id": req.userId,
-            "user_data": customer_obj,
-            "channel": req.channel,
+            "user_id": request.userId,
+            "user_data": customer,
+            "channel": request.channel or "SMS",
             
-            "customer_name": customer_obj.name,
-            "skin_type": str(customer_obj.skin_type),
-            "skin_concerns": str(customer_obj.skin_concerns),
+            # GraphState keys
+            "crm_reason": request.intention or "신제품 출시 이벤트",
+            "weather_detail": request.weatherDetail or "좋은 날씨",
+            "target_brand": request.targetBrand or "",
+            "target_persona": request.persona.replace("P", "") if request.persona and request.persona.startswith("P") else (request.persona or "1"),
             
-            "intention": req.intention,
-            "season": req.season or "계절 무관",
-            "weather_detail": req.weatherDetail or "좋은 날씨",
-            "brand_name": target_brand,
+            # Logic context
+            "season": request.season or "계절 무관",
+            "brand_name": request.targetBrand or "",
+            "persona_name": request.persona or "1",
             
-            # 기타 필수 필드
-            "product_name": "추천 상품",
-            "discounted_price": "0",
-            "discount_rate": "0",
-            "product_desc": "고객 맞춤 추천 제품",
-            "review_keywords": "긍정 리뷰",
-            "tone_style": "친절한",
-            "tone_examples": "",
-            "persona_name": req.persona,
-            "message_goal": "소통",
-            "communication_tone": "부드러움",
-            "limit_text": "200자",
-            "target_brand": target_brand,
-            "target_persona": req.persona,
-            "recommended_product_id": 101,
+            # Output placeholders
+            "message": "",
             "compliance_passed": False,
             "retry_count": 0,
             "error": "",
-            "success": False
+            "success": False,
+            "retrieved_legal_rules": []
         }
 
         print("🔥 AI 메시지 생성 시작...")
-        result = message_workflow.invoke(initial_state)
+        
+        result = await message_workflow.ainvoke(initial_state)
         
         # 3. 결과 검증
         if result.get("success", False):

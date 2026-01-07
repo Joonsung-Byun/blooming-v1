@@ -14,6 +14,7 @@ interface GenerateRequestParams {
   weatherDetail?: string | null;  
   beautyProfile?: Record<string, any>;
   userPrompt?: string;
+  persona?: string;
 }
 
 export class ApiService {
@@ -36,6 +37,7 @@ export class ApiService {
         weatherDetail: params.weatherDetail,
         beautyProfile: params.beautyProfile,
         userPrompt: params.userPrompt,
+        persona: params.persona,
       });
 
       return response.data;
