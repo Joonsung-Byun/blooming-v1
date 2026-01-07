@@ -75,7 +75,6 @@ async def generate_message(
     # 1. 고객 데이터 조회 (Supabase -> Fallback to Mock)
     db_user = supabase_client.get_user(x_user_id)  
     print(f"🧐 Fetching user data for ID: {x_user_id}") 
-    print(f"🧐 Fetched DB User: {db_user}")  # DB 조회 결과 확인 (Debugging)
     
     customer = None
     

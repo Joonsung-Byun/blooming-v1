@@ -350,6 +350,9 @@ async def recommend_product_with_brands(
         user_keywords = expand_keywords(user_keywords_raw)
         print(f"  🔍 키워드 확장: {user_keywords_raw} → {len(user_keywords)}개")
         
+        # [Fix] 피부 고민 정의 (키워드 보너스 계산용)
+        concerns = with_kr(normalize_list(customer.get("skin_concerns")), CONCERN_MAP)
+
         # intent 처리: weather일 경우 시즌별 키워드 추가
         weather_keywords = []
         if intent == "weather":

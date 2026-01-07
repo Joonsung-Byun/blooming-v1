@@ -120,7 +120,8 @@ def info_retrieval_node(state: GraphState) -> GraphState:
     recommended_product_id = state.get("recommended_product_id") # Input으로 들어올 수도 있음
     product_data_input = state.get("product_data")
     recommended_brand = state.get("recommended_brand", "")
-    intent = state.get("intent", "")  # intent 가져오기 (빈 문자열, "regular", "event", "weather")
+    # CRM Reason을 Intent로 사용 (키 매핑 보완)
+    intent = state.get("crm_reason", "")
     
     recommended_product = None
     
@@ -138,20 +139,25 @@ def info_retrieval_node(state: GraphState) -> GraphState:
             from services.supabase_client import supabase_client
             product_data_raw = supabase_client.get_product(recommended_product_id)
             
-            if product_data_raw:
-                recommended_product = convert_db_to_product_model(product_data_raw)
-            else:
-                # DB 조회 실패 시 Mock Fallback
-                recommended_product = get_mock_product(recommended_product_id)
-                if not recommended_product:
-                    # Mock도 없으면 RecSys API 호출
-                    recommended_product = call_recsys_api(user_data, recommended_brand, intent)
+            recommended_product = convert_db_to_product_model(product_data_raw)
+          
         else:
             # ID가 없으면 RecSys API 호출
             recommended_product = call_recsys_api(user_data, recommended_brand, intent)
         
         # 새로 조회된 경우 Brand Name 추출
-        brand_name = recommended_product.brand
+        if recommended_product:
+            brand_name = recommended_product.brand
+        else:
+            # 추천 상품이 없는 경우 처리 (예: 기본 브랜드 설정 또는 에러)
+            print("⚠️ Recommended product is None. Using default or target brand.")
+            # target_brand가 있으면 그것을 사용, 없으면 Unknown
+            if isinstance(recommended_brand, list) and recommended_brand:
+                brand_name = recommended_brand[0]
+            elif isinstance(recommended_brand, str) and recommended_brand:
+                brand_name = recommended_brand
+            else:
+                brand_name = "Unknown"
     
     # 2. 브랜드 톤앤매너 조회 (CRM Guideline JSON 연동)
     brand_tone_data = get_brand_tone_from_guideline(brand_name)
@@ -294,10 +300,18 @@ def call_recsys_api(user_data, target_brand: str = "", intent: str = ""):
         # RecSys API 호출
         recsys_url = settings.RecSys_API_URL
         
+        # target_brand가 리스트인지 확인하고 payload 구성
+        if isinstance(target_brand, list):
+            brand_payload = target_brand
+        elif isinstance(target_brand, str) and target_brand:
+            brand_payload = [target_brand]
+        else:
+            brand_payload = []
+
         payload = {
             "user_id": user_data.user_id,
-            "user_data": user_data.model_dump(),  # Pydantic v2: model_dump()
-            "target_brand": [target_brand] if target_brand else [],
+            # "user_data": user_data.model_dump(), 
+            "target_brand": brand_payload,
             "intention": intent if intent else ""
         }
         
@@ -310,6 +324,11 @@ def call_recsys_api(user_data, target_brand: str = "", intent: str = ""):
         
         print(f"[RecSys API] Success: {result.get('product_name')} (ID: {result.get('product_id')})")
         
+        # 추천 실패 시 처리 (ID가 UNKNOWN인 경우)
+        if result.get('product_id') == "UNKNOWN":
+            print("[RecSys API] Recommendation failed (UNKNOWN product). Returning None.")
+            return None
+
         # RecSys API 응답을 Product 객체로 변환
         product_data = result.get("product_data", {})
         from models.product import Product, ProductCategory, ProductPrice, ProductReview
@@ -338,8 +357,8 @@ def call_recsys_api(user_data, target_brand: str = "", intent: str = ""):
         
     except Exception as e:
         print(f"[RecSys API] Error: {e}")
-        # Fallback to mock recommendation
-        return recommend_product_for_customer(user_data)
+        # RecSys 호출 실패시 None 반환 (Graph에서 처리)
+        return None
 
 
 def convert_db_to_product_model_old(db_data: dict):
