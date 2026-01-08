@@ -94,8 +94,8 @@ export function StickySummary() {
         // 상황 정보 (Context)
         channel: selectedChannel || 'SMS',
         intention: intention || '프로모션',
-        hasBrand: true, // 기존 요구사항 기준 (필요하면 isBrandTargeting로 교체 가능)
-        targetBrand: targetBrand || '마몽드',
+        hasBrand: isBrandTargeting, // [FIX] 실제 브랜드 타게팅 여부 사용
+        targetBrand: isBrandTargeting ? (targetBrand || '') : '', // [FIX] 브랜드 타게팅 OFF면 빈 문자열
 
         // 기존 state에 날씨/시즌이 없어서 기본값으로 처리
         season: '봄',
@@ -107,6 +107,8 @@ export function StickySummary() {
 
       // 서비스 구현에 맞춰 result.message 형태 우선 지원 + 기존 response.data 형태도 안전 처리
       const result: any = await ApiService.generateMessage(params);
+      
+      console.log('🔍 [DEBUG] API Full Response:', result);
 
       const message =
         result?.message ??
@@ -115,8 +117,13 @@ export function StickySummary() {
         result?.content ??
         null;
 
+      const similarUserIds = result?.similar_user_ids ?? result?.data?.similar_user_ids ?? [];
+      
+      console.log('🔍 [DEBUG] Extracted message:', message);
+      console.log('🔍 [DEBUG] Extracted similarUserIds:', similarUserIds);
+
       if (message) {
-        setGeneratedResult(message);
+        setGeneratedResult({ content: message, similarUserIds });
 
         // 3) History Refresh (로그 새로고침) - 백엔드 저장을 기다린 후 조회
         // 프론트엔드에서 직접 저장하지 앟고, 백엔드 DB(crm_message_history)를 조회하도록 변경
@@ -221,7 +228,13 @@ export function StickySummary() {
       </div>
 
       {/* 결과 미리보기 카드 (히스토리 리스트는 제거됨) */}
-      {generatedResult && selectedChannel && <ResultCard content={generatedResult} channel={selectedChannel} />}
+      {generatedResult && selectedChannel && (
+        <ResultCard 
+          content={generatedResult.content || generatedResult} 
+          channel={selectedChannel} 
+          similarUserIds={generatedResult.similarUserIds || []}
+        />
+      )}
     </div>
   );
 }
